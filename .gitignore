@@ -9,6 +9,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 build/
 develop-eggs/
@@ -25,6 +26,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Node.js
+node_modules/
+.next/
+.npm
 
 # Output directories
 output/
