@@ -31,16 +31,8 @@ npm install -g pm2
 echo "🎬 Installing FFmpeg..."
 apt install -y ffmpeg imagemagick
 
-# Create app directory
-echo "📁 Creating application directory..."
-mkdir -p /var/www/bigmotion-studio
+# Setup frontend (repo already cloned)
 cd /var/www/bigmotion-studio
-
-# Clone repository
-echo "📥 Cloning repository..."
-git clone https://github.com/ihek130/BigMotionStudio.git .
-
-# Setup frontend
 echo "🎨 Setting up frontend..."
 npm install
 npm run build
