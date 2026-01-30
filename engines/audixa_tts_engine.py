@@ -126,8 +126,7 @@ class AudixaTTSEngine:
     Voice selection is driven by user's frontend choice.
     """
     
-    def __init__(self, config: Dict = None):
-        self.config = config or {}
+    def __init__(self):
         self.api_key = os.getenv('AUDIXA_API_KEY')
         
         # Initialize Audixa SDK with API key

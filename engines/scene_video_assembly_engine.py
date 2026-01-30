@@ -30,24 +30,22 @@ class SceneVideoAssemblyEngine:
     Each scene gets Ken Burns effect, proper transitions, and caption sync.
     """
     
-    def __init__(self, config: Dict = None):
-        self.config = config or {}
-        
+    def __init__(self):
         # Output settings
         self.output_width = 1080
         self.output_height = 1920
-        self.fps = self.config.get('fps', 30)
+        self.fps = 30
         
         # Effect settings
-        self.ken_burns_intensity = self.config.get('zoom_intensity', 1.08)  # 8% zoom
-        self.crossfade_duration = self.config.get('crossfade_duration', 0.3)
-        self.fade_in_duration = self.config.get('fade_in_duration', 0.5)
-        self.fade_out_duration = self.config.get('fade_out_duration', 0.5)
+        self.ken_burns_intensity = 1.08  # 8% zoom
+        self.crossfade_duration = 0.3
+        self.fade_in_duration = 0.5
+        self.fade_out_duration = 0.5
         
         # Audio settings
-        self.music_volume = self.config.get('music_volume', 0.12)  # 12% background
-        self.music_fade_in = self.config.get('music_fade_in', 2.0)
-        self.music_fade_out = self.config.get('music_fade_out', 3.0)
+        self.music_volume = 0.12  # 12% background
+        self.music_fade_in = 2.0
+        self.music_fade_out = 3.0
         
         # Encoding settings
         self.codec = self.config.get('codec', 'libx264')

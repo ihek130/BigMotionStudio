@@ -26,11 +26,10 @@ class SceneScriptEngine:
     PROFESSIONAL-GRADE: Viral optimization + factual research + quality validation
     """
     
-    def __init__(self, config: Dict = None):
-        self.config = config or {}
+    def __init__(self):
         self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.model = self.config.get('model', 'gpt-4.1')
-        self.temperature = self.config.get('temperature', 0.85)
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-4o')
+        self.temperature = 0.85
         
         # Viral pattern library (proven formulas from top creators)
         self.viral_hooks = {

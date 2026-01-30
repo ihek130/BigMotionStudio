@@ -13,10 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class SEOEngine:
-    def __init__(self, config: Dict):
-        self.config = config
+    def __init__(self):
         self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-        self.model = config.get('model', 'gpt-4.1')
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-4o')
     
     def generate_seo_metadata(self, script_data: Dict, video_metadata: Dict, niche: str = None) -> Dict:
         """Generate all SEO metadata"""

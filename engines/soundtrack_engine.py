@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class SoundtrackEngine:
-    def __init__(self, config: Dict):
-        self.config = config
+    def __init__(self):
         self.pixabay_api_key = os.getenv('PIXABAY_API_KEY')
         
         # Music ID to file mapping (matches frontend selection)

@@ -30,24 +30,23 @@ class SceneImageEngine:
     Uses DeepInfra API with centered composition for 9:16 cropping.
     """
     
-    def __init__(self, config: Dict = None):
-        self.config = config or {}
+    def __init__(self):
         self.deepinfra_key = os.getenv('DEEPINFRA_API_KEY')
         self.base_url = 'https://api.deepinfra.com/v1/inference'
         
         # Model configuration
-        self.model = self.config.get('model', 'black-forest-labs/FLUX-1-schnell')
+        self.model = os.getenv('IMAGE_MODEL', 'black-forest-labs/FLUX-1-schnell')
         
         # Generation settings (generate in square, then crop to 9:16)
-        self.generation_width = self.config.get('generation_width', 1024)
-        self.generation_height = self.config.get('generation_height', 1024)
+        self.generation_width = 1024
+        self.generation_height = 1024
         
         # Final output dimensions (9:16 for shorts)
         self.output_width = 1080
         self.output_height = 1920
         
         # Quality settings
-        self.inference_steps = self.config.get('inference_steps', 25)
+        self.inference_steps = 25
         self.guidance_scale = self.config.get('guidance_scale', 7.5)
         
         # Character consistency tracking

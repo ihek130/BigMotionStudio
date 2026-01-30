@@ -21,7 +21,7 @@ from engines.scene_video_assembly_engine import SceneVideoAssemblyEngine
 from engines.seo_engine import SEOEngine
 from engines.soundtrack_engine import SoundtrackEngine
 
-from utils import setup_logging, load_config, load_env, ensure_directories
+from utils import setup_logging, load_env, ensure_directories
 
 logger = logging.getLogger(__name__)
 
@@ -32,35 +32,35 @@ class SaaSVideoGenerator:
     Takes user settings from frontend and generates complete video.
     """
     
-    def __init__(self, config_path: str = "config.yaml"):
+    def __init__(self):
         """Initialize the video generator with all engines"""
         
-        # Load environment and config
+        # Load environment variables
         load_env()
-        self.config = load_config(config_path) if os.path.exists(config_path) else {}
         
-        # Setup logging
-        self.logger = setup_logging(self.config.get('general', {}).get('logs_dir', 'logs'))
+        # Setup logging (uses LOGS_DIR env var or 'logs' default)
+        logs_dir = os.getenv('LOGS_DIR', 'logs')
+        self.logger = setup_logging(logs_dir)
         
         # Initialize engines
         self.logger.info("Initializing SaaS video generation engines...")
         self._initialize_engines()
         
-        # Directories
-        self.output_dir = self.config.get('general', {}).get('output_dir', 'output')
-        self.temp_dir = self.config.get('general', {}).get('temp_dir', 'temp')
+        # Directories (from environment or defaults)
+        self.output_dir = os.getenv('OUTPUT_DIR', 'output')
+        self.temp_dir = os.getenv('TEMP_DIR', 'temp')
         
         self.logger.info("SaaS Video Generator initialized successfully")
     
     def _initialize_engines(self):
-        """Initialize all engine instances"""
+        """Initialize all engine instances (they use their own env-based defaults)"""
         
-        self.script_engine = SceneScriptEngine(self.config.get('script_engine', {}))
-        self.image_engine = SceneImageEngine(self.config.get('image_engine', {}))
-        self.tts_engine = AudixaTTSEngine(self.config.get('tts_engine', {}))
-        self.video_assembly_engine = SceneVideoAssemblyEngine(self.config.get('video_assembly', {}))
-        self.seo_engine = SEOEngine(self.config.get('seo_engine', {}))
-        self.soundtrack_engine = SoundtrackEngine(self.config.get('soundtrack_engine', {}))
+        self.script_engine = SceneScriptEngine()
+        self.image_engine = SceneImageEngine()
+        self.tts_engine = AudixaTTSEngine()
+        self.video_assembly_engine = SceneVideoAssemblyEngine()
+        self.seo_engine = SEOEngine()
+        self.soundtrack_engine = SoundtrackEngine()
     
     def generate_video(
         self,
