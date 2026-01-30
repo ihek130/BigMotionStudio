@@ -177,6 +177,9 @@ class PlatformUploadOrchestrator:
             # Clear scheduled_for if it was scheduled
             if scheduled_time and video_record.scheduled_for:
                 logger.info(f"Video published at scheduled time: {scheduled_time}")
+            
+            # 🗑️ CLEANUP: Delete temp files after successful upload
+            self._cleanup_temp_files(video_record)
         
         db.commit()
         
@@ -193,6 +196,36 @@ class PlatformUploadOrchestrator:
             'platforms_failed': [p for p, r in results.items() if not r.get('success')],
             'results': results
         }
+    
+    def _cleanup_temp_files(self, video_record) -> None:
+        """
+        Delete temporary video files after successful upload to platforms.
+        Keeps database record but removes files to save storage.
+        """
+        import shutil
+        
+        try:
+            # Get project directory
+            project_dir = os.path.dirname(video_record.video_path) if video_record.video_path else None
+            
+            if project_dir and os.path.exists(project_dir):
+                logger.info(f"🗑️ Deleting temp files from: {project_dir}")
+                
+                # Delete entire project folder
+                shutil.rmtree(project_dir)
+                logger.info(f"✅ Temp files deleted successfully")
+                
+                # Clear file paths in database (keep URLs)
+                video_record.video_path = None
+                video_record.thumbnail_path = None
+                video_record.script_path = None
+                
+            else:
+                logger.warning(f"Project directory not found or already deleted: {project_dir}")
+                
+        except Exception as e:
+            logger.error(f"Failed to cleanup temp files: {e}", exc_info=True)
+            # Don't fail upload if cleanup fails
     
     def _upload_to_youtube(
         self,

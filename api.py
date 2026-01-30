@@ -689,6 +689,80 @@ async def get_job_status(job_id: str):
         error=job["error"]
     )
 
+@app.get("/api/videos/{video_id}/stream")
+async def stream_video(
+    video_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Stream video file from temp folder for preview.
+    Only works before video is uploaded to platforms.
+    """
+    from fastapi.responses import FileResponse
+    from database.models import Video as VideoModel
+    
+    # Get video record
+    video = db.query(VideoModel).filter(VideoModel.id == video_id).first()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Verify ownership
+    if str(video.series.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to view this video")
+    
+    # Check if video file exists
+    if not video.video_path or not os.path.exists(video.video_path):
+        raise HTTPException(status_code=404, detail="Video file not found. It may have been uploaded and deleted.")
+    
+    # Stream video file
+    return FileResponse(
+        video.video_path,
+        media_type="video/mp4",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Disposition": f'inline; filename="video_{video_id}.mp4"'
+        }
+    )
+
+
+@app.get("/api/videos/{video_id}/download")
+async def download_video(
+    video_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Download video file.
+    """
+    from fastapi.responses import FileResponse
+    from database.models import Video as VideoModel
+    
+    # Get video record
+    video = db.query(VideoModel).filter(VideoModel.id == video_id).first()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Verify ownership
+    if str(video.series.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to download this video")
+    
+    # Check if video file exists
+    if not video.video_path or not os.path.exists(video.video_path):
+        raise HTTPException(status_code=404, detail="Video file not found. It may have been uploaded and deleted.")
+    
+    # Download video file
+    filename = f"{video.title or 'video'}_{video_id}.mp4".replace(' ', '_')
+    return FileResponse(
+        video.video_path,
+        media_type="video/mp4",
+        filename=filename,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
 
 @app.get("/api/videos/{user_id}")
 async def list_user_videos(user_id: str):
