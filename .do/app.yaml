@@ -1,0 +1,203 @@
+# Digital Ocean App Platform Configuration
+# This defines a multi-component app with frontend, backend, scheduler, and cron jobs
+
+name: reelflow-saas
+region: nyc
+
+# Frontend Service (Next.js)
+services:
+  - name: frontend
+    github:
+      repo: ihek130/BigMotionStudio
+      branch: main
+      deploy_on_push: true
+    
+    # Build settings
+    build_command: npm install && npm run build
+    run_command: npm start
+    
+    # Environment
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xs  # $5/month
+    
+    # Port mapping
+    http_port: 3000
+    
+    routes:
+      - path: /
+    
+    envs:
+      - key: NEXT_PUBLIC_API_URL
+        value: ${backend.PUBLIC_URL}
+      - key: NODE_ENV
+        value: production
+
+  # Backend Service (FastAPI)
+  - name: backend
+    github:
+      repo: ihek130/BigMotionStudio
+      branch: main
+      deploy_on_push: true
+    
+    # Build settings
+    build_command: pip install -r requirements.txt
+    run_command: uvicorn api:app --host 0.0.0.0 --port 8000
+    
+    # Environment
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: professional-xs  # $12/month (needs more resources)
+    
+    # Port mapping
+    http_port: 8000
+    
+    routes:
+      - path: /api
+    
+    envs:
+      # Database
+      - key: MONGODB_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET  # Add in DO dashboard
+      
+      # Auth
+      - key: JWT_SECRET_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # OpenAI
+      - key: OPENAI_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # DeepInfra
+      - key: DEEPINFRA_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # ElevenLabs
+      - key: ELEVENLABS_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # Pexels
+      - key: PEXELS_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # YouTube
+      - key: YOUTUBE_CLIENT_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: YOUTUBE_CLIENT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # TikTok
+      - key: TIKTOK_CLIENT_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: TIKTOK_CLIENT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # Instagram
+      - key: INSTAGRAM_APP_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: INSTAGRAM_APP_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      
+      # Storage
+      - key: OUTPUT_DIR
+        value: output
+      - key: TEMP_DIR
+        value: temp
+      - key: LOGS_DIR
+        value: logs
+      
+      # Models
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: IMAGE_MODEL
+        value: black-forest-labs/FLUX-1-schnell
+
+# Background Workers
+workers:
+  # Scheduler Worker (runs continuously)
+  - name: scheduler
+    github:
+      repo: ihek130/BigMotionStudio
+      branch: main
+      deploy_on_push: true
+    
+    build_command: pip install -r requirements.txt
+    run_command: python scheduler.py
+    
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: basic-xs  # $5/month
+    
+    envs:
+      # Inherit all backend envs
+      - key: MONGODB_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: OPENAI_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: DEEPINFRA_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: ELEVENLABS_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: PEXELS_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: OUTPUT_DIR
+        value: output
+      - key: TEMP_DIR
+        value: temp
+      - key: LOGS_DIR
+        value: logs
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: IMAGE_MODEL
+        value: black-forest-labs/FLUX-1-schnell
+
+# Cron Jobs
+jobs:
+  # Cleanup old files every hour
+  - name: cleanup
+    github:
+      repo: ihek130/BigMotionStudio
+      branch: main
+      deploy_on_push: true
+    
+    build_command: pip install -r requirements.txt
+    run_command: python cleanup_old_files.py
+    
+    environment_slug: python
+    instance_size_slug: basic-xxs  # $3/month
+    
+    # Run every hour
+    kind: PRE_DEPLOY  # Change to SCHEDULED after first deploy
+    schedule: "0 * * * *"  # Cron syntax: every hour
+    
+    envs:
+      - key: TEMP_DIR
+        value: temp
+      - key: OUTPUT_DIR
+        value: output
+      - key: LOGS_DIR
+        value: logs
+
+# Database (Optional - use DO Managed MongoDB)
+# databases:
+#   - name: mongodb
+#     engine: MONGODB
+#     version: "6"
+#     size: db-s-1vcpu-1gb  # $15/month
