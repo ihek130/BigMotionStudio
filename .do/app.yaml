@@ -185,8 +185,6 @@ jobs:
     
     # Run every hour
     kind: SCHEDULED
-    schedule:
-      minute: "0"
     
     envs:
       - key: TEMP_DIR
