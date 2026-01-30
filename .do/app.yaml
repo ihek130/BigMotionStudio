@@ -184,8 +184,9 @@ jobs:
     instance_size_slug: basic-xxs  # $3/month
     
     # Run every hour
-    kind: PRE_DEPLOY  # Change to SCHEDULED after first deploy
-    schedule: "0 * * * *"  # Cron syntax: every hour
+    kind: SCHEDULED
+    schedule:
+      minute: "0"
     
     envs:
       - key: TEMP_DIR
