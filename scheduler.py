@@ -4,7 +4,7 @@ Video Generation & Upload Scheduler
 Automatically generates and uploads videos based on series schedule.
 
 Features:
-- Generates videos 6 hours before scheduled upload time
+- Generates videos 1.5 hours before scheduled upload time (optimized for minimal server storage)
 - Respects plan frequency limits (3x/week, daily, 2x/day)
 - Handles multiple series per user
 - Background task processing
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 class VideoScheduler:
     """Manages automated video generation and upload scheduling"""
     
-    GENERATION_LEAD_TIME = timedelta(hours=6)  # Generate 6 hours before upload
+    GENERATION_LEAD_TIME = timedelta(hours=1.5)  # Generate 1.5 hours before upload (optimized for server efficiency)
     
     def __init__(self):
         self.db = next(get_db())
