@@ -7,8 +7,11 @@ import { PlatformProvider } from '@/context/PlatformContext'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ReelFlow - Create Viral Videos on Autopilot',
+  title: 'Big Motion Studio - Create Viral Videos on Autopilot',
   description: 'Generate and post viral short-form videos to Instagram Reels, TikTok, and YouTube Shorts automatically with AI',
+  icons: {
+    icon: '/Pictures/Pi7_cropper.png',
+  },
 }
 
 export default function RootLayout({
