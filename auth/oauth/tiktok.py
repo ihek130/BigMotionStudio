@@ -4,6 +4,8 @@ TikTok OAuth - Connect TikTok accounts for video posting
 
 import os
 import secrets
+import hashlib
+import base64
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -80,8 +82,12 @@ async def tiktok_connect(
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
     
-    # Generate code verifier for PKCE
+    # Generate code verifier for PKCE (43 characters, base64url encoded)
     code_verifier = secrets.token_urlsafe(43)
+    
+    # Generate code challenge from verifier (SHA256 hash, base64url encoded)
+    code_challenge_bytes = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    code_challenge = base64.urlsafe_b64encode(code_challenge_bytes).decode('utf-8').rstrip('=')
     
     # Store state for verification
     oauth_states[state] = {
@@ -90,7 +96,7 @@ async def tiktok_connect(
         "created_at": datetime.utcnow().isoformat()
     }
     
-    # Build authorization URL
+    # Build authorization URL with PKCE parameters
     redirect_uri = f"{BACKEND_URL}/api/oauth/tiktok/callback"
     scope = ",".join(TIKTOK_SCOPES)
     
@@ -101,6 +107,8 @@ async def tiktok_connect(
         f"&response_type=code"
         f"&redirect_uri={redirect_uri}"
         f"&state={state}"
+        f"&code_challenge={code_challenge}"
+        f"&code_challenge_method=S256"
     )
     
     return TikTokConnectResponse(auth_url=auth_url)
@@ -147,8 +155,9 @@ async def tiktok_callback(
     
     try:
         async with httpx.AsyncClient() as client:
-            # Exchange code for tokens
+            # Exchange code for tokens with PKCE code_verifier
             redirect_uri = f"{BACKEND_URL}/api/oauth/tiktok/callback"
+            code_verifier = state_data["code_verifier"]
             
             token_response = await client.post(
                 TIKTOK_TOKEN_URL,
@@ -157,7 +166,8 @@ async def tiktok_callback(
                     "client_secret": TIKTOK_CLIENT_SECRET,
                     "code": code,
                     "grant_type": "authorization_code",
-                    "redirect_uri": redirect_uri
+                    "redirect_uri": redirect_uri,
+                    "code_verifier": code_verifier
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
