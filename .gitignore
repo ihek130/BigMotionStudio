@@ -54,6 +54,8 @@ client_secrets.json
 .DS_Store
 Thumbs.db
 
-# Model cache
-models/
+# Model cache (AI models, not database models)
 transformers_cache/
+*.pt
+*.pth
+*.onnx
