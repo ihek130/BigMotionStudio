@@ -12,7 +12,8 @@ opencv-python>=4.9.0
 numpy>=1.26.0
 
 # Audio
-audioxa>=0.1.0
+audixa>=0.1.0
+aiofiles>=23.0.0
 pydub>=0.25.1
 edge-tts>=6.1.10
 
