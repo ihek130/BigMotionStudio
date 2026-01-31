@@ -20,17 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 class ThumbnailEngine:
-    def __init__(self, config: Dict):
-        self.config = config
+    def __init__(self):
         self.deepinfra_key = os.getenv('DEEPINFRA_API_KEY')
         self.openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))  # For text extraction
         self.base_url = 'https://api.deepinfra.com/v1/inference'
 
         # History-aware anti-repetition
-        self.output_dir = config.get('output_dir', 'output')
-        self.history_lookback_days = int(config.get('history_lookback_days', 30))
-        self.history_max_projects = int(config.get('history_max_projects', 50))
-        self.meta_filename = config.get('meta_filename', 'thumbnail_meta.json')
+        self.output_dir = 'output'
+        self.history_lookback_days = 30
+        self.history_max_projects = 50
+        self.meta_filename = 'thumbnail_meta.json'
         
         # Thumbnail subject strategy: default to non-celebrity, generic subject/symbol for clarity + trust.
         self.use_influential_personalities = bool(config.get('use_influential_personalities', False))
@@ -227,9 +226,9 @@ class ThumbnailEngine:
     
     def _select_emotion(self, script_data: Dict) -> str:
         """Select primary emotion for thumbnail"""
-        emotions = self.config.get('emotions', [
+        emotions = [
             'concerned', 'shocked', 'skeptical', 'disappointed', 'guilty'
-        ])
+        ]
         
         # Analyze script for emotion keywords
         script_text = script_data.get('full_script', '').lower()

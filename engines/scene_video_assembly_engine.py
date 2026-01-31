@@ -48,10 +48,10 @@ class SceneVideoAssemblyEngine:
         self.music_fade_out = 3.0
         
         # Encoding settings
-        self.codec = self.config.get('codec', 'libx264')
-        self.audio_codec = self.config.get('audio_codec', 'aac')
-        self.bitrate = self.config.get('bitrate', '8000k')  # High quality for shorts
-        self.threads = self.config.get('threads', 6)
+        self.codec = 'libx264'
+        self.audio_codec = 'aac'
+        self.bitrate = '8000k'  # High quality for shorts
+        self.threads = 6
     
     def assemble_video(
         self,

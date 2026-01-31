@@ -47,7 +47,7 @@ class SceneImageEngine:
         
         # Quality settings
         self.inference_steps = 25
-        self.guidance_scale = self.config.get('guidance_scale', 7.5)
+        self.guidance_scale = 7.5
         
         # Character consistency tracking
         self.character_image_cache = {}  # name -> base64 image for reference

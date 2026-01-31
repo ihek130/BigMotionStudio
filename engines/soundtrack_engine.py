@@ -299,7 +299,7 @@ class SoundtrackEngine:
         """Filter tracks based on rules"""
         filtered = []
         
-        rules = self.config.get('rules', {})
+        rules = {}
         
         for track in tracks:
             tags_lower = track.get('tags', '').lower()

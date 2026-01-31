@@ -142,9 +142,8 @@ class CaptionEngine:
     and renders them as styled ASS subtitles
     """
     
-    def __init__(self, config: Dict = None):
-        self.config = config or {}
-        self.deepgram_api_key = self.config.get('deepgram_api_key') or os.getenv('DEEPGRAM_API_KEY')
+    def __init__(self):
+        self.deepgram_api_key = os.getenv('DEEPGRAM_API_KEY')
         
         if not self.deepgram_api_key:
             logger.warning("Deepgram API key not configured - using fallback timing")
@@ -154,8 +153,8 @@ class CaptionEngine:
         self.video_height = 1920
         
         # Caption settings
-        self.words_per_group = self.config.get('words_per_group', 4)  # Words shown at once
-        self.min_display_time = self.config.get('min_display_time', 0.3)  # Minimum time per word group
+        self.words_per_group = 4  # Words shown at once
+        self.min_display_time = 0.3  # Minimum time per word group
     
     def transcribe_audio(self, audio_path: str) -> List[WordTiming]:
         """

@@ -136,8 +136,8 @@ class AudixaTTSEngine:
             logger.warning("AUDIXA_API_KEY not set - TTS will fail")
         
         # Default settings
-        self.default_model = self.config.get('model', 'base')
-        self.max_chars_per_request = self.config.get('max_chars', 10000)
+        self.default_model = 'base'
+        self.max_chars_per_request = 10000
     
     def generate_voiceover(
         self,

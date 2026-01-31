@@ -49,8 +49,8 @@ class SEOEngine:
     
     def _generate_title(self, topic: str, script_text: str) -> str:
         """Generate CTR-optimized title using PROVEN viral formulas"""
-        rules = self.config.get('rules', {})
-        max_length = rules.get('title_max_length', 70)
+        rules = {}
+        max_length = 70
         title_variations = rules.get('title_variations', {})
         
         # Calculate weighted random selection (60% Jani, 25% Ramsey, 15% Psychology)
@@ -147,7 +147,7 @@ Return only the title, nothing else."""
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=self.config.get('temperature', 0.7),
+                temperature=0.7,
                 max_tokens=100
             )
             
@@ -166,8 +166,8 @@ Return only the title, nothing else."""
     
     def _generate_description(self, topic: str, script_text: str, niche: str = 'general') -> str:
         """Generate video description with niche-specific hashtags"""
-        rules = self.config.get('rules', {})
-        desc_length = rules.get('description_length', [150, 300])
+        rules = {}
+        desc_length = [150, 300]
         
         prompt = f"""Create a YouTube video description for this video.
 
@@ -195,7 +195,7 @@ Return only the description text."""
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=self.config.get('temperature', 0.7),
+                temperature=0.7,
                 max_tokens=400
             )
             
@@ -245,7 +245,7 @@ Return comma-separated tags only."""
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=self.config.get('temperature', 0.7),
+                temperature=0.7,
                 max_tokens=120
             )
 
@@ -272,7 +272,7 @@ Return comma-separated tags only."""
     
     def _generate_chapters(self, script_data: Dict) -> List[Dict]:
         """Generate video chapters"""
-        if not self.config.get('rules', {}).get('chapters_enabled', True):
+        if not True:  # chapters always enabled
             return []
         
         timed_script = script_data.get('timed_script', [])
