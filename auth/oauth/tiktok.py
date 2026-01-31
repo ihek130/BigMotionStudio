@@ -8,6 +8,7 @@ import hashlib
 import base64
 from datetime import datetime, timedelta
 from typing import Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
@@ -98,18 +99,20 @@ async def tiktok_connect(
     
     # Build authorization URL with PKCE parameters
     redirect_uri = f"{BACKEND_URL}/api/oauth/tiktok/callback"
-    scope = ",".join(TIKTOK_SCOPES)
+    scope = ",".join(TIKTOK_SCOPES)  # TikTok uses comma-separated scopes
     
-    auth_url = (
-        f"{TIKTOK_AUTH_URL}"
-        f"?client_key={TIKTOK_CLIENT_KEY}"
-        f"&scope={scope}"
-        f"&response_type=code"
-        f"&redirect_uri={redirect_uri}"
-        f"&state={state}"
-        f"&code_challenge={code_challenge}"
-        f"&code_challenge_method=S256"
-    )
+    # Build URL with proper encoding
+    params = {
+        "client_key": TIKTOK_CLIENT_KEY,
+        "scope": scope,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256"
+    }
+    
+    auth_url = f"{TIKTOK_AUTH_URL}?{urlencode(params)}"
     
     return TikTokConnectResponse(auth_url=auth_url)
 
