@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, signup, isLoading, error, clearError } = useAuth()
+  const searchParams = useSearchParams()
+  const { login, signup, isLoading, error, clearError, refreshUser, isAuthenticated } = useAuth()
   
   const [isLogin, setIsLogin] = useState(true)
   const [formData, setFormData] = useState({
@@ -18,6 +19,45 @@ export default function LoginPage() {
   })
   const [localError, setLocalError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [oauthProcessing, setOauthProcessing] = useState(false)
+
+  // Handle OAuth callback tokens
+  useEffect(() => {
+    const accessToken = searchParams.get('access_token')
+    const refreshToken = searchParams.get('refresh_token')
+    const oauthError = searchParams.get('error')
+    
+    if (oauthError) {
+      setLocalError(`OAuth error: ${oauthError}`)
+      // Clean URL
+      window.history.replaceState({}, '', '/login')
+      return
+    }
+    
+    if (accessToken && refreshToken && !oauthProcessing) {
+      setOauthProcessing(true)
+      // Store tokens
+      localStorage.setItem('reelflow_access_token', accessToken)
+      localStorage.setItem('reelflow_refresh_token', refreshToken)
+      // Clean URL
+      window.history.replaceState({}, '', '/login')
+      // Refresh user in AuthContext, then redirect
+      refreshUser().then(() => {
+        router.push('/dashboard')
+      }).catch((err) => {
+        console.error('OAuth refresh error:', err)
+        setLocalError('Failed to complete sign in. Please try again.')
+        setOauthProcessing(false)
+      })
+    }
+  }, [searchParams, router, refreshUser, oauthProcessing])
+
+  // If already authenticated (not from OAuth flow), redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated && !oauthProcessing && !isLoading) {
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, oauthProcessing, isLoading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,6 +113,18 @@ export default function LoginPage() {
   }
 
   const displayError = localError || error
+
+  // Show loading while processing OAuth
+  if (oauthProcessing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Completing sign in...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 flex items-center justify-center p-4">

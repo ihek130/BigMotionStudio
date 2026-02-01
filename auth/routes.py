@@ -24,6 +24,7 @@ from auth.security import (
     get_reset_expiry
 )
 from auth.dependencies import get_current_user, get_current_active_user
+from auth.email import send_reset_email, send_verification_email
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -339,7 +340,7 @@ async def forgot_password(
         db.commit()
         
         # Send reset email (background task)
-        # background_tasks.add_task(send_reset_email, user.email, user.reset_token)
+        background_tasks.add_task(send_reset_email, user.email, user.reset_token)
     
     # Always return success (security: don't reveal if email exists)
     return MessageResponse(
@@ -455,6 +456,8 @@ async def logout():
 # OAuth Endpoints (Google, GitHub)
 # =============================================================================
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 class GoogleAuthRequest(BaseModel):
     """Google OAuth token request"""
     credential: str  # Google ID token
@@ -465,7 +468,254 @@ class GitHubAuthRequest(BaseModel):
     code: str
 
 
-@router.post("/google", response_model=TokenResponse)
+@router.get("/google")
+async def google_auth_redirect():
+    """
+    Redirect to Google OAuth consent screen.
+    """
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+    REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/api/auth/google/callback")
+    
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth not configured"
+        )
+    
+    # Build Google OAuth URL
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+    
+    from urllib.parse import urlencode
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=auth_url)
+
+
+@router.get("/google/callback")
+async def google_auth_callback(
+    code: str = None,
+    error: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Google OAuth callback.
+    Exchange code for tokens and create/login user.
+    """
+    from fastapi.responses import RedirectResponse
+    import httpx
+    
+    if error:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error={error}")
+    
+    if not code:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=no_code")
+    
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+    REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/api/auth/google/callback")
+    
+    try:
+        # Exchange code for tokens
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": REDIRECT_URI
+                }
+            )
+            token_data = token_response.json()
+            
+            if "error" in token_data:
+                return RedirectResponse(url=f"{FRONTEND_URL}/login?error={token_data.get('error_description', 'token_error')}")
+            
+            # Get user info
+            user_response = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {token_data['access_token']}"}
+            )
+            user_data = user_response.json()
+        
+        google_id = user_data.get("id")
+        email = user_data.get("email")
+        name = user_data.get("name")
+        avatar = user_data.get("picture")
+        
+        # Find or create user
+        user = db.query(User).filter(User.google_id == google_id).first()
+        
+        if not user:
+            existing_user = db.query(User).filter(User.email == email.lower()).first()
+            
+            if existing_user:
+                existing_user.google_id = google_id
+                if not existing_user.avatar_url:
+                    existing_user.avatar_url = avatar
+                user = existing_user
+            else:
+                user = User(
+                    email=email.lower(),
+                    name=name,
+                    avatar_url=avatar,
+                    google_id=google_id,
+                    email_verified=True,
+                    plan="launch"
+                )
+                db.add(user)
+        
+        user.last_login_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        
+        # Generate tokens
+        access_token = create_access_token({"sub": str(user.id)})
+        refresh_token = create_refresh_token({"sub": str(user.id)})
+        
+        # Redirect to frontend with tokens
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/login?access_token={access_token}&refresh_token={refresh_token}"
+        )
+        
+    except Exception as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error={str(e)[:50]}")
+
+
+@router.get("/github")
+async def github_auth_redirect():
+    """
+    Redirect to GitHub OAuth consent screen.
+    """
+    GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+    REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", f"{os.getenv('BACKEND_URL', 'http://localhost:8000')}/api/auth/github/callback")
+    
+    if not GITHUB_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GitHub OAuth not configured"
+        )
+    
+    from urllib.parse import urlencode
+    params = {
+        "client_id": GITHUB_CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "scope": "user:email"
+    }
+    
+    auth_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+    
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=auth_url)
+
+
+@router.get("/github/callback")
+async def github_auth_callback(
+    code: str = None,
+    error: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle GitHub OAuth callback.
+    """
+    from fastapi.responses import RedirectResponse
+    import httpx
+    
+    if error:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error={error}")
+    
+    if not code:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=no_code")
+    
+    GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+    GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Exchange code for token
+            token_response = await client.post(
+                "https://github.com/login/oauth/access_token",
+                data={
+                    "client_id": GITHUB_CLIENT_ID,
+                    "client_secret": GITHUB_CLIENT_SECRET,
+                    "code": code
+                },
+                headers={"Accept": "application/json"}
+            )
+            token_data = token_response.json()
+            
+            if "error" in token_data:
+                return RedirectResponse(url=f"{FRONTEND_URL}/login?error={token_data.get('error')}")
+            
+            github_token = token_data["access_token"]
+            
+            # Get user info
+            user_response = await client.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"Bearer {github_token}", "Accept": "application/json"}
+            )
+            user_data = user_response.json()
+            
+            # Get email
+            emails_response = await client.get(
+                "https://api.github.com/user/emails",
+                headers={"Authorization": f"Bearer {github_token}", "Accept": "application/json"}
+            )
+            emails_data = emails_response.json()
+            primary_email = next((e["email"] for e in emails_data if e["primary"]), user_data.get("email"))
+        
+        github_id = str(user_data["id"])
+        name = user_data.get("name") or user_data.get("login")
+        avatar = user_data.get("avatar_url")
+        
+        # Find or create user
+        user = db.query(User).filter(User.github_id == github_id).first()
+        
+        if not user:
+            existing_user = db.query(User).filter(User.email == primary_email.lower()).first()
+            
+            if existing_user:
+                existing_user.github_id = github_id
+                if not existing_user.avatar_url:
+                    existing_user.avatar_url = avatar
+                user = existing_user
+            else:
+                user = User(
+                    email=primary_email.lower(),
+                    name=name,
+                    avatar_url=avatar,
+                    github_id=github_id,
+                    email_verified=True,
+                    plan="launch"
+                )
+                db.add(user)
+        
+        user.last_login_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        
+        # Generate tokens
+        access_token = create_access_token({"sub": str(user.id)})
+        refresh_token = create_refresh_token({"sub": str(user.id)})
+        
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/login?access_token={access_token}&refresh_token={refresh_token}"
+        )
+        
+    except Exception as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error={str(e)[:50]}")
+
+
+@router.post("/google/token", response_model=TokenResponse)
 async def google_auth(
     request: GoogleAuthRequest,
     db: Session = Depends(get_db)
