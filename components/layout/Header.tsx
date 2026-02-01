@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Menu, X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,7 +31,14 @@ export default function Header() {
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
-            <img src="/Pictures/Pi7_cropper.png" alt="Big Motion Studio" className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl transform group-hover:scale-110 transition-transform" />
+            <Image 
+              src="/Pictures/Pi7_cropper.png" 
+              alt="Big Motion Studio" 
+              width={40} 
+              height={40} 
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl transform group-hover:scale-110 transition-transform"
+              priority
+            />
             <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 bg-clip-text text-transparent">
               Big Motion Studio
             </span>

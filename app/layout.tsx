@@ -21,6 +21,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="scroll-smooth">
+      <head>
+        {/* Preload critical assets for faster LCP */}
+        <link rel="preload" href="/Pictures/Pi7_cropper.png" as="image" />
+        <link rel="preload" href="/landing-samples/posters/scary-stories.jpg" as="image" />
+        <link rel="preload" href="/landing-samples/posters/true-crime.jpg" as="image" />
+        <link rel="preload" href="/landing-samples/posters/history.jpg" as="image" />
+        <link rel="preload" href="/landing-samples/posters/psychology.jpg" as="image" />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           <PlatformProvider>

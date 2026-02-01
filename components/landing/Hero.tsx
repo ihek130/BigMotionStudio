@@ -2,70 +2,44 @@
 
 import { ArrowRight, Instagram, Youtube, Volume2, VolumeX } from 'lucide-react'
 import Link from 'next/link'
-import { useState, useRef, useEffect, createContext, useContext } from 'react'
+import Image from 'next/image'
+import { useState, useRef, useEffect } from 'react'
 
 const niches = [
-  { emoji: '🔥', name: 'Horror', video: '/landing-samples/scary-stories.mp4', views: '2.3M' },
-  { emoji: '🕵️', name: 'Crime', video: '/landing-samples/true-crime.mp4', views: '1.8M' },
-  { emoji: '📚', name: 'History', video: '/landing-samples/history.mp4', views: '3.2M' },
-  { emoji: '🧠', name: 'Psychology', video: '/landing-samples/psychology.mp4', views: '1.2M' },
-  { emoji: '💪', name: 'Motivation', video: '/landing-samples/stoic-motivation.mp4', views: '4.1M' },
-  { emoji: '💡', name: 'Facts', video: '/landing-samples/random-fact.mp4', views: '2.7M' },
-  { emoji: '✨', name: 'Wisdom', video: '/landing-samples/good-morals.mp4', views: '1.5M' },
+  { emoji: '🔥', name: 'Horror', video: '/landing-samples/compressed/scary-stories.mp4', poster: '/landing-samples/posters/scary-stories.jpg', views: '2.3M' },
+  { emoji: '🕵️', name: 'Crime', video: '/landing-samples/compressed/true-crime.mp4', poster: '/landing-samples/posters/true-crime.jpg', views: '1.8M' },
+  { emoji: '📚', name: 'History', video: '/landing-samples/compressed/history.mp4', poster: '/landing-samples/posters/history.jpg', views: '3.2M' },
+  { emoji: '🧠', name: 'Psychology', video: '/landing-samples/compressed/psychology.mp4', poster: '/landing-samples/posters/psychology.jpg', views: '1.2M' },
+  { emoji: '💪', name: 'Motivation', video: '/landing-samples/compressed/stoic-motivation.mp4', poster: '/landing-samples/posters/stoic-motivation.jpg', views: '4.1M' },
+  { emoji: '💡', name: 'Facts', video: '/landing-samples/compressed/random-fact.mp4', poster: '/landing-samples/posters/random-fact.jpg', views: '2.7M' },
+  { emoji: '✨', name: 'Wisdom', video: '/landing-samples/compressed/good-morals.mp4', poster: '/landing-samples/posters/good-morals.jpg', views: '1.5M' },
 ]
 
-// Video cache context to share preloaded videos
-const VideoCache = createContext<Map<string, string>>(new Map())
-
-// Preload all videos and convert to blob URLs for instant playback
-function usePreloadVideos() {
-  const [videoCache, setVideoCache] = useState<Map<string, string>>(new Map())
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const cache = new Map<string, string>()
-    let isMounted = true
-
-    async function preloadVideos() {
-      const promises = niches.map(async (niche) => {
-        try {
-          const response = await fetch(niche.video)
-          const blob = await response.blob()
-          const blobUrl = URL.createObjectURL(blob)
-          cache.set(niche.video, blobUrl)
-        } catch (error) {
-          // Fallback to original URL if fetch fails
-          cache.set(niche.video, niche.video)
-        }
-      })
-
-      await Promise.all(promises)
-      
-      if (isMounted) {
-        setVideoCache(cache)
-        setIsLoading(false)
-      }
-    }
-
-    preloadVideos()
-
-    return () => {
-      isMounted = false
-      // Cleanup blob URLs on unmount
-      cache.forEach((blobUrl) => {
-        if (blobUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(blobUrl)
-        }
-      })
-    }
-  }, [])
-
-  return { videoCache, isLoading }
-}
-
-function VideoCard({ niche, index, setKey, cachedVideoUrl }: { niche: typeof niches[0], index: number, setKey: string, cachedVideoUrl?: string }) {
+function VideoCard({ niche, index, setKey }: { niche: typeof niches[0], index: number, setKey: string }) {
   const [isMuted, setIsMuted] = useState(true)
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false)
+  const [isInView, setIsInView] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  // Intersection Observer to load video only when card is in view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '100px' }
+    )
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [])
 
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -75,24 +49,35 @@ function VideoCard({ niche, index, setKey, cachedVideoUrl }: { niche: typeof nic
     }
   }
 
-  // Use cached blob URL or original URL
-  const videoSrc = cachedVideoUrl || niche.video
-
   return (
     <div
+      ref={cardRef}
       key={`${setKey}-${index}`}
       className="flex-shrink-0 w-28 sm:w-32 aspect-[9/16] rounded-xl overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 relative group"
     >
-      {/* Video Background - preloaded */}
-      <video
-        ref={videoRef}
-        src={videoSrc}
-        className="absolute inset-0 w-full h-full object-cover"
-        autoPlay
-        loop
-        muted
-        playsInline
+      {/* Poster Image - shows instantly */}
+      <Image
+        src={niche.poster}
+        alt={niche.name}
+        fill
+        className={`object-cover transition-opacity duration-300 ${isVideoLoaded ? 'opacity-0' : 'opacity-100'}`}
+        sizes="(max-width: 640px) 112px, 128px"
+        priority={index < 4}
       />
+
+      {/* Video - loads lazily when in view */}
+      {isInView && (
+        <video
+          ref={videoRef}
+          src={niche.video}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isVideoLoaded ? 'opacity-100' : 'opacity-0'}`}
+          autoPlay
+          loop
+          muted
+          playsInline
+          onCanPlay={() => setIsVideoLoaded(true)}
+        />
+      )}
       
       {/* Overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/30" />
@@ -130,8 +115,6 @@ function VideoCard({ niche, index, setKey, cachedVideoUrl }: { niche: typeof nic
 }
 
 export default function Hero() {
-  const { videoCache, isLoading } = usePreloadVideos()
-
   return (
     <section className="relative pt-20 pb-8 sm:pt-24 sm:pb-12 overflow-hidden">
       {/* Background gradient - Premium floral green */}
@@ -227,45 +210,29 @@ export default function Hero() {
           <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-emerald-50/90 to-transparent z-10 pointer-events-none" />
           <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-emerald-50/90 to-transparent z-10 pointer-events-none" />
           
-          {/* Loading state */}
-          {isLoading && (
-            <div className="flex gap-4 justify-center py-4">
+          {/* Carousel track - shows instantly with posters, videos load lazily */}
+          <div className="group flex hover:[animation-play-state:paused]">
+            <div className="flex gap-4 animate-scroll hover:[animation-play-state:paused]">
+              {/* First set of cards */}
               {niches.map((niche, index) => (
-                <div
-                  key={`loading-${index}`}
-                  className="flex-shrink-0 w-28 sm:w-32 aspect-[9/16] rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"
+                <VideoCard 
+                  key={`first-${index}`} 
+                  niche={niche} 
+                  index={index} 
+                  setKey="first" 
+                />
+              ))}
+              {/* Duplicate set for seamless loop */}
+              {niches.map((niche, index) => (
+                <VideoCard 
+                  key={`second-${index}`} 
+                  niche={niche} 
+                  index={index + 7} 
+                  setKey="second" 
                 />
               ))}
             </div>
-          )}
-          
-          {/* Carousel track - only show when loaded */}
-          {!isLoading && (
-            <div className="group flex hover:[animation-play-state:paused]">
-              <div className="flex gap-4 animate-scroll hover:[animation-play-state:paused]">
-                {/* First set of cards */}
-                {niches.map((niche, index) => (
-                  <VideoCard 
-                    key={`first-${index}`} 
-                    niche={niche} 
-                    index={index} 
-                    setKey="first" 
-                    cachedVideoUrl={videoCache.get(niche.video)}
-                  />
-                ))}
-                {/* Duplicate set for seamless loop */}
-                {niches.map((niche, index) => (
-                  <VideoCard 
-                    key={`second-${index}`} 
-                    niche={niche} 
-                    index={index} 
-                    setKey="second" 
-                    cachedVideoUrl={videoCache.get(niche.video)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Trust indicators */}
