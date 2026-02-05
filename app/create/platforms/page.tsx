@@ -160,7 +160,15 @@ export default function PlatformsPage() {
     }
   }
 
+  const [showInstagramNote, setShowInstagramNote] = useState(false)
+
   const handleConnectPlatform = async (platformId: string) => {
+    // Show info note for Instagram before redirecting
+    if (platformId === 'instagram' && !showInstagramNote) {
+      setShowInstagramNote(true)
+      return
+    }
+    setShowInstagramNote(false)
     setLoading(platformId)
     
     try {
@@ -357,6 +365,56 @@ export default function PlatformsPage() {
           )
         })}
       </div>
+
+      {/* Instagram Info Note Modal */}
+      {showInstagramNote && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl">
+            <div className="flex items-center space-x-2 mb-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-lg flex items-center justify-center text-white">
+                <Instagram className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Before you continue</h3>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-amber-800 leading-relaxed">
+                You&apos;ll be redirected to <span className="font-semibold">Facebook</span> first &mdash; this is completely normal. Instagram uses Meta&apos;s login system.
+              </p>
+              <ul className="mt-2 space-y-1.5 text-sm text-amber-800">
+                <li className="flex items-start space-x-2">
+                  <span className="text-amber-500 mt-0.5">1.</span>
+                  <span>Select the <span className="font-semibold">Facebook Page</span> linked to your Instagram account</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-amber-500 mt-0.5">2.</span>
+                  <span>Grant the requested permissions</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-amber-500 mt-0.5">3.</span>
+                  <span>Your Instagram account will be connected automatically</span>
+                </li>
+              </ul>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              <span className="font-semibold">Requirements:</span> Your Instagram must be a Business or Creator account linked to a Facebook Page.
+            </p>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowInstagramNote(false)}
+                className="flex-1 py-2.5 text-sm text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConnectPlatform('instagram')}
+                className="flex-1 py-2.5 text-sm text-white font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:from-purple-600 hover:via-pink-600 hover:to-orange-600 rounded-lg transition-all shadow-md"
+              >
+                Continue to Facebook
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info Box - Compact */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 mb-5">
