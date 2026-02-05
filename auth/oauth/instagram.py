@@ -29,16 +29,15 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # Meta OAuth URLs
-META_AUTH_URL = "https://www.facebook.com/v18.0/dialog/oauth"
-META_TOKEN_URL = "https://graph.facebook.com/v18.0/oauth/access_token"
-META_GRAPH_URL = "https://graph.facebook.com/v18.0"
+META_AUTH_URL = "https://www.facebook.com/v21.0/dialog/oauth"
+META_TOKEN_URL = "https://graph.facebook.com/v21.0/oauth/access_token"
+META_GRAPH_URL = "https://graph.facebook.com/v21.0"
 
 # OAuth scopes for Instagram Business
 INSTAGRAM_SCOPES = [
     "instagram_basic",
     "instagram_content_publish",
     "pages_show_list",
-    "pages_read_engagement",
     "business_management"
 ]
 

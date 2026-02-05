@@ -20,7 +20,7 @@ class InstagramUploadEngine:
     """
     
     def __init__(self):
-        self.graph_url = "https://graph.facebook.com/v18.0"
+        self.graph_url = "https://graph.facebook.com/v21.0"
         self.max_poll_attempts = 60  # 5 minutes max wait
         self.poll_interval = 5  # seconds
     
