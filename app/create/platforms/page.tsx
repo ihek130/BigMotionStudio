@@ -84,7 +84,8 @@ export default function PlatformsPage() {
         return
       }
       
-      let response = await fetch('http://localhost:8000/api/platforms/connections', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      let response = await fetch(`${API_URL}/api/platforms/connections`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -96,7 +97,7 @@ export default function PlatformsPage() {
         
         if (refreshToken) {
           try {
-            const refreshResponse = await fetch('http://localhost:8000/api/auth/refresh', {
+            const refreshResponse = await fetch(`${API_URL}/api/auth/refresh`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ refresh_token: refreshToken }),
@@ -108,7 +109,7 @@ export default function PlatformsPage() {
               localStorage.setItem('reelflow_refresh_token', tokens.refresh_token)
               
               // Retry with new token
-              response = await fetch('http://localhost:8000/api/platforms/connections', {
+              response = await fetch(`${API_URL}/api/platforms/connections`, {
                 headers: {
                   'Authorization': `Bearer ${tokens.access_token}`,
                 },
@@ -165,7 +166,7 @@ export default function PlatformsPage() {
     try {
       // Get OAuth URL from backend
       const token = getToken()
-      const response = await fetch(`http://localhost:8000/api/oauth/${platformId}/connect`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')}/api/oauth/${platformId}/connect`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -223,7 +224,7 @@ export default function PlatformsPage() {
       }
       
       // Call backend to create series
-      const response = await fetch('http://localhost:8000/api/series/create', {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')}/api/series/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

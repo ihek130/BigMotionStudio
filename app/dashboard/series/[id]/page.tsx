@@ -59,7 +59,7 @@ export default function SeriesDetailPage() {
         return
       }
       
-      const response = await fetch(`http://localhost:8000/api/series/${params.id}`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')}/api/series/${params.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

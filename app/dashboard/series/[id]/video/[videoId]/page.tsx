@@ -70,7 +70,7 @@ export default function VideoDetailPage() {
         return
       }
       
-      const response = await fetch(`http://localhost:8000/api/series/${params.id}/videos/${params.videoId}`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')}/api/series/${params.id}/videos/${params.videoId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

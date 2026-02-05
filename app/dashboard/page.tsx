@@ -16,6 +16,8 @@ interface Series {
   status: 'active' | 'paused' | 'generating'
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [series, setSeries] = useState<Series[]>([])
@@ -35,7 +37,7 @@ export default function DashboardPage() {
         return
       }
       
-      const response = await fetch('http://localhost:8000/api/series', {
+      const response = await fetch(`${API_BASE_URL}/api/series`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
