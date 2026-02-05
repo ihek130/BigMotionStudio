@@ -39,25 +39,36 @@ export default function LoginPage() {
       // Store tokens
       localStorage.setItem('reelflow_access_token', accessToken)
       localStorage.setItem('reelflow_refresh_token', refreshToken)
-      // Clean URL
-      window.history.replaceState({}, '', '/login')
+      
       // Refresh user in AuthContext, then redirect
       refreshUser().then(() => {
+        // Clean URL AFTER successful auth
+        window.history.replaceState({}, '', '/login')
+        // Redirect to dashboard
         router.push('/dashboard')
       }).catch((err) => {
         console.error('OAuth refresh error:', err)
         setLocalError('Failed to complete sign in. Please try again.')
         setOauthProcessing(false)
+        // Clean URL even on error
+        window.history.replaceState({}, '', '/login')
       })
     }
-  }, [searchParams, router, refreshUser, oauthProcessing])
+  }, [searchParams, router, refreshUser])
 
   // If already authenticated (not from OAuth flow), redirect to dashboard
   useEffect(() => {
-    if (isAuthenticated && !oauthProcessing && !isLoading) {
+    // Only redirect if:
+    // 1. User is authenticated
+    // 2. NOT currently processing OAuth
+    // 3. NOT loading
+    // 4. NO tokens in URL (avoid redirecting during OAuth callback)
+    const hasTokensInUrl = searchParams.get('access_token') || searchParams.get('refresh_token')
+    
+    if (isAuthenticated && !oauthProcessing && !isLoading && !hasTokensInUrl) {
       router.push('/dashboard')
     }
-  }, [isAuthenticated, oauthProcessing, isLoading, router])
+  }, [isAuthenticated, oauthProcessing, isLoading, router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
