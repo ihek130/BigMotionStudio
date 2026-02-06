@@ -166,29 +166,23 @@ class AudixaTTSEngine:
         # Add natural pauses for better pacing
         script_text = self._add_natural_pauses(script_text)
         
-        # Generate with Audixa API
-        try:
-            success = self._generate_with_audixa(
-                text=script_text,
-                voice_config=voice_config,
-                output_path=output_path
-            )
-            
-            if success:
-                return self._get_audio_metadata(output_path, voice_config)
-            else:
-                raise Exception("Audixa TTS generation failed")
-                
-        except Exception as e:
-            logger.error(f"Audixa TTS failed: {e}")
-            raise Exception(f"TTS generation failed: {e}")
+        success = self._generate_with_audixa(
+            text=script_text,
+            voice_config=voice_config,
+            output_path=output_path
+        )
+        
+        if success:
+            return self._get_audio_metadata(output_path, voice_config)
+        else:
+            raise Exception("Audixa TTS generation failed")
     
     def _generate_with_audixa(
         self,
         text: str,
         voice_config: Dict,
         output_path: str,
-        max_retries: int = 3
+        max_retries: int = 2
     ) -> bool:
         """Generate audio using Audixa SDK"""
         
@@ -241,7 +235,7 @@ class AudixaTTSEngine:
                 logger.info(f"TTS params: voice={tts_params['voice']}, model={tts_params['model']}, speed={tts_params['speed']}, text_len={len(tts_params['text'])}")
                 logger.info(f"Text first 100 chars: {repr(tts_params['text'][:100])}")
                 
-                audixa.tts_to_file(**tts_params)
+                audixa.tts_to_file(**tts_params, timeout=600, poll_interval=2.0)
                 
                 # Convert WAV to MP3
                 audio = AudioSegment.from_wav(temp_wav_path)
@@ -298,6 +292,8 @@ class AudixaTTSEngine:
                     temp_wav.name,
                     voice=voice_config["voice_id"],
                     model=self.default_model,
+                    timeout=600,
+                    poll_interval=2.0,
                 )
                 
                 # Load as AudioSegment

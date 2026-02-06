@@ -99,6 +99,16 @@ class PlatformUploadOrchestrator:
                     }
                     continue
                 
+                # Auto-refresh token if expired or about to expire
+                if connection.needs_refresh or connection.is_expired:
+                    logger.info(f"Token for {platform} needs refresh, attempting...")
+                    try:
+                        refresh_success = self._refresh_token(connection, platform, db)
+                        if not refresh_success:
+                            logger.warning(f"Token refresh failed for {platform}, attempting upload anyway")
+                    except Exception as refresh_err:
+                        logger.warning(f"Token refresh error for {platform}: {refresh_err}")
+                
                 # Upload based on platform
                 if platform == 'youtube':
                     result = self._upload_to_youtube(
@@ -197,6 +207,68 @@ class PlatformUploadOrchestrator:
             'results': results
         }
     
+    def _refresh_token(self, connection, platform: str, db: Session) -> bool:
+        """
+        Refresh OAuth token for a platform connection before upload.
+        
+        Args:
+            connection: PlatformConnection record
+            platform: Platform name (youtube, tiktok, instagram)
+            db: Database session
+            
+        Returns:
+            True if refresh succeeded, False otherwise
+        """
+        import asyncio
+        import concurrent.futures
+        
+        try:
+            if platform == "youtube":
+                from auth.oauth.youtube import refresh_youtube_token
+                return refresh_youtube_token(connection, db)
+            
+            elif platform == "tiktok":
+                from auth.oauth.tiktok import refresh_tiktok_token
+                
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                
+                if loop and loop.is_running():
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(
+                            asyncio.run,
+                            refresh_tiktok_token(connection, db)
+                        )
+                        return future.result(timeout=30)
+                else:
+                    return asyncio.run(refresh_tiktok_token(connection, db))
+            
+            elif platform == "instagram":
+                from auth.oauth.instagram import refresh_instagram_token
+                
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                
+                if loop and loop.is_running():
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        future = pool.submit(
+                            asyncio.run,
+                            refresh_instagram_token(connection, db)
+                        )
+                        return future.result(timeout=30)
+                else:
+                    return asyncio.run(refresh_instagram_token(connection, db))
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Token refresh failed for {platform}: {e}", exc_info=True)
+            return False
+    
     def _cleanup_temp_files(self, video_record) -> None:
         """
         Delete temporary video files after successful upload to platforms.
@@ -260,14 +332,35 @@ class PlatformUploadOrchestrator:
         """Upload to Instagram"""
         import asyncio
         
-        return asyncio.run(
-            self.instagram_engine.upload_video(
-                platform_connection=connection,
-                video_path=video_path,
-                caption=caption,
-                share_to_feed=True
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        
+        if loop and loop.is_running():
+            # We're inside an async context (e.g., FastAPI background task)
+            # Create a new thread to run the async upload
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self.instagram_engine.upload_video(
+                        platform_connection=connection,
+                        video_path=video_path,
+                        caption=caption,
+                        share_to_feed=True
+                    )
+                )
+                return future.result(timeout=300)
+        else:
+            return asyncio.run(
+                self.instagram_engine.upload_video(
+                    platform_connection=connection,
+                    video_path=video_path,
+                    caption=caption,
+                    share_to_feed=True
+                )
             )
-        )
     
     def _upload_to_tiktok(
         self,
@@ -279,16 +372,39 @@ class PlatformUploadOrchestrator:
         """Upload to TikTok"""
         import asyncio
         
-        return asyncio.run(
-            self.tiktok_engine.upload_video(
-                platform_connection=connection,
-                video_path=video_path,
-                title=title,
-                description=description,
-                privacy_level="PUBLIC_TO_EVERYONE",
-                disable_comment=False
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        
+        if loop and loop.is_running():
+            # We're inside an async context (e.g., FastAPI background task)
+            # Create a new thread to run the async upload
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self.tiktok_engine.upload_video(
+                        platform_connection=connection,
+                        video_path=video_path,
+                        title=title,
+                        description=description,
+                        privacy_level="PUBLIC_TO_EVERYONE",
+                        disable_comment=False
+                    )
+                )
+                return future.result(timeout=300)
+        else:
+            return asyncio.run(
+                self.tiktok_engine.upload_video(
+                    platform_connection=connection,
+                    video_path=video_path,
+                    title=title,
+                    description=description,
+                    privacy_level="PUBLIC_TO_EVERYONE",
+                    disable_comment=False
+                )
             )
-        )
     
     def _create_caption(self, title: str, description: str, tags: list) -> str:
         """Create short caption for Instagram/TikTok"""

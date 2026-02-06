@@ -171,13 +171,13 @@ class VideoScheduler:
         return now + timedelta(days=1)
     
     def should_generate_now(self, scheduled_upload_time: datetime) -> bool:
-        """Check if video should be generated now (6 hours before upload)"""
+        """Check if video should be generated now (1.5 hours before upload)"""
         now = datetime.utcnow()
         generation_time = scheduled_upload_time - self.GENERATION_LEAD_TIME
         
-        # Generate if we're within 30 minutes of generation time
-        time_diff = abs((now - generation_time).total_seconds())
-        return time_diff <= 1800  # 30 minutes window
+        # Generate if we're past the generation start time but before the upload time
+        # This gives a wide window: from 1.5 hours before upload until upload time itself
+        return generation_time <= now <= scheduled_upload_time
     
     def get_videos_to_generate(self) -> List[Dict]:
         """Find videos that need to be generated now"""

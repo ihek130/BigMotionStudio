@@ -20,9 +20,12 @@ module.exports = {
     {
       name: 'scheduler',
       script: '/var/www/bigmotion-studio/venv/bin/python',
-      args: 'scheduler.py',
+      args: 'scheduler.py --mode service',
       cwd: '/var/www/bigmotion-studio',
-      interpreter: 'none'
+      interpreter: 'none',
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 60000
     }
   ]
 };

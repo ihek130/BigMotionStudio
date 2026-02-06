@@ -182,9 +182,7 @@ async def health_check():
     """Detailed health check"""
     return {
         "status": "healthy",
-        "generator_ready": generator is not None,
-        "active_jobs": len([j for j in jobs.values() if j['status'] == 'processing']),
-        "total_jobs": len(jobs)
+        "generator_ready": generator is not None
     }
 
 

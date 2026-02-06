@@ -123,17 +123,17 @@ export default function SeriesDetailPage() {
 
         if (data.youtube?.length > 0) {
           data.youtube.forEach((c: any) => accounts.push({
-            id: c.id, platform: 'youtube', username: c.platform_username || 'YouTube Channel', isActive: c.is_active
+            id: c.id, platform: 'youtube', username: c.username || c.platform_username || 'YouTube Channel', isActive: c.status === 'active'
           }))
         }
         if (data.tiktok?.length > 0) {
           data.tiktok.forEach((c: any) => accounts.push({
-            id: c.id, platform: 'tiktok', username: c.platform_username || '@TikTok', isActive: c.is_active
+            id: c.id, platform: 'tiktok', username: c.username || c.platform_username || '@TikTok', isActive: c.status === 'active'
           }))
         }
         if (data.instagram?.length > 0) {
           data.instagram.forEach((c: any) => accounts.push({
-            id: c.id, platform: 'instagram', username: c.platform_username || 'Instagram', isActive: c.is_active
+            id: c.id, platform: 'instagram', username: c.username || c.platform_username || 'Instagram', isActive: c.status === 'active'
           }))
         }
 
