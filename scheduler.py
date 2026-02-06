@@ -20,8 +20,9 @@ Or via cron/Task Scheduler:
 import asyncio
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
+from zoneinfo import ZoneInfo
 import logging
 
 # Add parent directory to path
@@ -75,6 +76,19 @@ class VideoScheduler:
         }
         return frequencies.get(plan, frequencies["launch"])
     
+    def _local_to_utc(self, naive_dt: datetime, tz_name: str) -> datetime:
+        """Convert a naive datetime (in user's local timezone) to naive UTC datetime"""
+        try:
+            local_tz = ZoneInfo(tz_name)
+            # Attach the user's timezone to the naive datetime
+            local_dt = naive_dt.replace(tzinfo=local_tz)
+            # Convert to UTC and strip tzinfo for consistency
+            utc_dt = local_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return utc_dt
+        except Exception as e:
+            logger.warning(f"Invalid timezone '{tz_name}', treating as UTC: {e}")
+            return naive_dt
+    
     def calculate_next_scheduled_time(
         self, 
         series: Series, 
@@ -83,38 +97,45 @@ class VideoScheduler:
     ) -> datetime:
         """
         Calculate next scheduled upload time based on plan and posting_times.
+        Posting times are in the user's local timezone (series.timezone).
+        Returns a naive UTC datetime.
         
         Args:
-            series: Series configuration with posting_times
+            series: Series configuration with posting_times and timezone
             user: User with plan (launch/grow/scale)
-            last_video_time: When last video was scheduled/published
+            last_video_time: When last video was scheduled/published (UTC)
             
         Returns:
-            Next datetime to schedule video upload
+            Next datetime (UTC) to schedule video upload
         """
         now = datetime.utcnow()
         posting_times = series.posting_times or ["09:00"]  # Default 9 AM
+        tz_name = getattr(series, 'timezone', None) or "UTC"
         frequency = self.get_plan_posting_frequency(user.plan)
         
         # Launch plan: 3x per week (e.g., Mon/Wed/Fri at first posting_time)
         if user.plan == "launch":
-            # Use first posting time
+            # Use first posting time (in user's local timezone)
             hour, minute = map(int, posting_times[0].split(':'))
             
-            # If no last video, schedule for next occurrence
+            # Build the local time, then convert to UTC
             if not last_video_time:
-                next_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_local = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_time = self._local_to_utc(next_local, tz_name)
                 if next_time <= now:
-                    next_time += timedelta(days=1)
+                    next_local += timedelta(days=1)
+                    next_time = self._local_to_utc(next_local, tz_name)
                 return next_time
             
             # Schedule ~2-3 days after last video
-            next_time = last_video_time + timedelta(days=frequency["days_between"])
-            next_time = next_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            next_local = last_video_time + timedelta(days=frequency["days_between"])
+            next_local = next_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            next_time = self._local_to_utc(next_local, tz_name)
             
             # Ensure it's in the future
             while next_time <= now:
-                next_time += timedelta(days=frequency["days_between"])
+                next_local += timedelta(days=frequency["days_between"])
+                next_time = self._local_to_utc(next_local, tz_name)
             
             return next_time
         
@@ -123,17 +144,21 @@ class VideoScheduler:
             hour, minute = map(int, posting_times[0].split(':'))
             
             if not last_video_time:
-                next_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_local = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_time = self._local_to_utc(next_local, tz_name)
                 if next_time <= now:
-                    next_time += timedelta(days=1)
+                    next_local += timedelta(days=1)
+                    next_time = self._local_to_utc(next_local, tz_name)
                 return next_time
             
             # Next day at same time
-            next_time = last_video_time + timedelta(days=1)
-            next_time = next_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            next_local = last_video_time + timedelta(days=1)
+            next_local = next_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            next_time = self._local_to_utc(next_local, tz_name)
             
             while next_time <= now:
-                next_time += timedelta(days=1)
+                next_local += timedelta(days=1)
+                next_time = self._local_to_utc(next_local, tz_name)
             
             return next_time
         
@@ -146,26 +171,28 @@ class VideoScheduler:
                 # Schedule for next available slot
                 for time_str in time_slots:
                     hour, minute = map(int, time_str.split(':'))
-                    next_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    next_local = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    next_time = self._local_to_utc(next_local, tz_name)
                     if next_time > now:
                         return next_time
                 # All slots today passed, use first slot tomorrow
                 hour, minute = map(int, time_slots[0].split(':'))
-                return (now + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_local = (now + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+                return self._local_to_utc(next_local, tz_name)
             
             # Find next slot after last video
-            last_hour = last_video_time.hour
-            
             for time_str in time_slots:
                 hour, minute = map(int, time_str.split(':'))
-                next_time = last_video_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_local = last_video_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                next_time = self._local_to_utc(next_local, tz_name)
                 
                 if next_time > last_video_time and next_time > now:
                     return next_time
             
             # No more slots today, use first slot tomorrow
             hour, minute = map(int, time_slots[0].split(':'))
-            return (last_video_time + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            next_local = (last_video_time + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            return self._local_to_utc(next_local, tz_name)
         
         # Default: daily
         return now + timedelta(days=1)
@@ -194,6 +221,7 @@ class VideoScheduler:
             # Get series owner
             user = self.db.query(User).filter(User.id == series.user_id).first()
             if not user:
+                logger.warning(f"Series '{series.name}' has no owner, skipping")
                 continue
             
             # Check if user can generate more videos this month
@@ -208,12 +236,20 @@ class VideoScheduler:
                 Video.scheduled_for.isnot(None)
             ).order_by(Video.scheduled_for.desc()).first()
             
+            last_video_time = last_video.scheduled_for if last_video else None
+            tz_name = getattr(series, 'timezone', None) or 'UTC'
+            logger.info(f"Series '{series.name}': plan={user.plan}, posting_times={series.posting_times}, timezone={tz_name}, last_video_at={last_video_time}")
+            
             # Calculate next scheduled upload time
             next_upload_time = self.calculate_next_scheduled_time(
                 series,
                 user,
-                last_video.scheduled_for if last_video else None
+                last_video_time
             )
+            
+            generation_time = next_upload_time - self.GENERATION_LEAD_TIME
+            now = datetime.utcnow()
+            logger.info(f"Series '{series.name}': next_upload={next_upload_time}, generation_window={generation_time} to {next_upload_time}, now={now}")
             
             # Check if we should generate now
             if self.should_generate_now(next_upload_time):
@@ -224,6 +260,9 @@ class VideoScheduler:
                     "user": user,
                     "scheduled_upload_time": next_upload_time
                 })
+            else:
+                time_until_gen = generation_time - now
+                logger.info(f"Series '{series.name}': NOT in generation window. Generation starts in {time_until_gen}")
         
         return videos_to_generate
     

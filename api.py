@@ -122,6 +122,7 @@ class CreateSeriesRequest(BaseModel):
     seriesName: str
     description: str
     postingTimes: List[str] = ["09:00"]  # Array of posting times (1 for Launch/Grow, 2 for Scale)
+    timezone: str = "UTC"  # User's timezone (e.g., "Asia/Karachi")
     platforms: List[str] = ["youtube"]
 
 
@@ -229,6 +230,7 @@ async def create_series(
             caption_style=request.captionStyle,
             video_duration=request.videoDuration,
             posting_times=request.postingTimes,
+            timezone=request.timezone,
             platforms=request.platforms,
             status="active"
         )

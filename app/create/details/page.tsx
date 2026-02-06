@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useWizard } from '@/context/WizardContext'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, ArrowLeft, Clock } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Clock, Globe } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 // TikTok Icon Component
@@ -33,9 +33,34 @@ export default function DetailsPage() {
     videoDuration: '60',
     postingTime1: '09:00',
     postingTime2: '18:00', // Second time for Scale plan
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Common timezone options
+  const timezoneOptions = [
+    { value: 'Pacific/Honolulu', label: 'Hawaii (HST, UTC-10)' },
+    { value: 'America/Anchorage', label: 'Alaska (AKST, UTC-9)' },
+    { value: 'America/Los_Angeles', label: 'Pacific Time (PST, UTC-8)' },
+    { value: 'America/Denver', label: 'Mountain Time (MST, UTC-7)' },
+    { value: 'America/Chicago', label: 'Central Time (CST, UTC-6)' },
+    { value: 'America/New_York', label: 'Eastern Time (EST, UTC-5)' },
+    { value: 'America/Sao_Paulo', label: 'Brasília (BRT, UTC-3)' },
+    { value: 'UTC', label: 'UTC (UTC+0)' },
+    { value: 'Europe/London', label: 'London (GMT, UTC+0)' },
+    { value: 'Europe/Paris', label: 'Central Europe (CET, UTC+1)' },
+    { value: 'Europe/Istanbul', label: 'Istanbul (TRT, UTC+3)' },
+    { value: 'Asia/Dubai', label: 'Dubai (GST, UTC+4)' },
+    { value: 'Asia/Karachi', label: 'Pakistan (PKT, UTC+5)' },
+    { value: 'Asia/Kolkata', label: 'India (IST, UTC+5:30)' },
+    { value: 'Asia/Dhaka', label: 'Bangladesh (BST, UTC+6)' },
+    { value: 'Asia/Bangkok', label: 'Bangkok (ICT, UTC+7)' },
+    { value: 'Asia/Shanghai', label: 'China (CST, UTC+8)' },
+    { value: 'Asia/Tokyo', label: 'Japan (JST, UTC+9)' },
+    { value: 'Australia/Sydney', label: 'Sydney (AEST, UTC+10)' },
+    { value: 'Pacific/Auckland', label: 'New Zealand (NZST, UTC+12)' },
+  ]
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -72,6 +97,7 @@ export default function DetailsPage() {
         postingTimes: videosPerDay === 2 
           ? [formData.postingTime1, formData.postingTime2]
           : [formData.postingTime1],
+        timezone: formData.timezone,
       })
       router.push('/create/platforms')
     }
@@ -225,6 +251,37 @@ export default function DetailsPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Timezone */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-2">
+              <span className="flex items-center space-x-1">
+                <Globe className="w-3 h-3" />
+                <span>Your Timezone</span>
+                <span className="text-[10px] text-gray-400 font-normal ml-1">
+                  — Auto-detected from your browser
+                </span>
+              </span>
+            </label>
+            <select
+              name="timezone"
+              value={formData.timezone}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-emerald-500 focus:outline-none transition-colors text-sm"
+            >
+              {timezoneOptions.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+              {/* If user's detected timezone isn't in our list, add it */}
+              {!timezoneOptions.find(tz => tz.value === formData.timezone) && (
+                <option value={formData.timezone}>
+                  {formData.timezone}
+                </option>
+              )}
+            </select>
           </div>
 
           {/* Compact Summary */}

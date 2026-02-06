@@ -46,6 +46,7 @@ class Series(Base):
     
     # Posting schedule
     posting_times = Column(JSON, default=["09:00"])  # Array of times
+    timezone = Column(String(50), default="UTC")  # User's timezone (e.g., "Asia/Karachi")
     
     # Target platforms
     platforms = Column(JSON, default=["youtube"])  # youtube, tiktok, instagram
@@ -85,6 +86,7 @@ class Series(Base):
             "captionStyle": self.caption_style,
             "videoDuration": self.video_duration,
             "postingTimes": self.posting_times,
+            "timezone": self.timezone or "UTC",
             "platforms": self.platforms,
             "status": self.status,
             "videosGenerated": self.videos_generated,

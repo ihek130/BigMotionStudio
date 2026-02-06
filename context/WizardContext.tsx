@@ -22,6 +22,7 @@ export interface WizardData {
   description?: string
   videoDuration?: number  // 30, 45, 60 seconds
   postingTimes?: string[] // Array of posting times based on plan
+  timezone?: string       // User's timezone (e.g., "Asia/Karachi")
   
   // Step 6: Platforms
   platforms?: string[]

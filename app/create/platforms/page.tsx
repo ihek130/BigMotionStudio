@@ -228,6 +228,7 @@ export default function PlatformsPage() {
         seriesName: data.seriesName || 'My Series',
         description: data.description || '',
         postingTimes: data.postingTimes || ['09:00'],
+        timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         platforms: selectedPlatforms
       }
       
