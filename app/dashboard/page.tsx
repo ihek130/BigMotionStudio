@@ -22,6 +22,7 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [series, setSeries] = useState<Series[]>([])
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     fetchSeries()
@@ -45,7 +46,8 @@ export default function DashboardPage() {
       
       if (response.ok) {
         const data = await response.json()
-        setSeries(data.map((s: any) => ({
+        const seriesList = data.series || data
+        setSeries((Array.isArray(seriesList) ? seriesList : []).map((s: any) => ({
           id: s.id,
           name: s.name,
           type: s.niche,
@@ -59,6 +61,46 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Failed to fetch series:', error)
       setLoading(false)
+    }
+  }
+
+  const handleToggleStatus = async (seriesId: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('reelflow_access_token') : null
+    if (!token) return
+    setActionLoading(seriesId)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/series/${seriesId}/status`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setSeries(prev => prev.map(s => s.id === seriesId ? { ...s, status: data.status } : s))
+      }
+    } catch (e) {
+      console.error('Failed to toggle status:', e)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDelete = async (seriesId: string) => {
+    if (!confirm('Are you sure you want to delete this series and all its videos? This cannot be undone.')) return
+    const token = typeof window !== 'undefined' ? localStorage.getItem('reelflow_access_token') : null
+    if (!token) return
+    setActionLoading(seriesId)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/series/${seriesId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        setSeries(prev => prev.filter(s => s.id !== seriesId))
+      }
+    } catch (e) {
+      console.error('Failed to delete series:', e)
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -166,11 +208,19 @@ export default function DashboardPage() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-2">
-                            <button className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-1">
+                            <button
+                              onClick={() => handleToggleStatus(item.id)}
+                              disabled={actionLoading === item.id}
+                              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-1 disabled:opacity-50"
+                            >
                               {item.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                               <span>{item.status === 'active' ? 'Pause' : 'Resume'}</span>
                           </button>
-                          <button className="p-2 text-gray-400 hover:text-red-600 transition-colors">
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            disabled={actionLoading === item.id}
+                            className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -203,11 +253,19 @@ export default function DashboardPage() {
                     <div className="text-sm text-gray-900">{item.videos} video(s) published</div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button className="flex-1 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center space-x-1">
+                    <button
+                      onClick={() => handleToggleStatus(item.id)}
+                      disabled={actionLoading === item.id}
+                      className="flex-1 px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center space-x-1 disabled:opacity-50"
+                    >
                       {item.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                       <span>{item.status === 'active' ? 'Pause' : 'Resume'}</span>
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-red-600 transition-colors border border-gray-300 rounded-lg">
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      disabled={actionLoading === item.id}
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors border border-gray-300 rounded-lg disabled:opacity-50"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>

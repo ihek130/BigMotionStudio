@@ -287,7 +287,7 @@ CAPTION_STYLE_CONFIG = {
         "stroke_color": "black",
         "stroke_width": 4,
         "animation": "word-by-word",
-        "position": "bottom",
+        "position": "center",
     },
     "neon-glow": {
         "font": "Arial-Bold",
@@ -306,7 +306,7 @@ CAPTION_STYLE_CONFIG = {
         "stroke_color": "black",
         "stroke_width": 2,
         "animation": "fade",
-        "position": "bottom",
+        "position": "center",
     },
     "youtube-style": {
         "font": "Arial-Bold",
@@ -315,7 +315,7 @@ CAPTION_STYLE_CONFIG = {
         "bg_color": "black",
         "bg_opacity": 0.8,
         "animation": "karaoke",
-        "position": "bottom",
+        "position": "center",
     },
     "colorful-pop": {
         "font": "Arial-Black",
@@ -334,7 +334,7 @@ CAPTION_STYLE_CONFIG = {
         "stroke_color": "black",
         "stroke_width": 6,
         "animation": "slide",
-        "position": "bottom",
+        "position": "center",
     },
     "boxed": {
         "font": "Arial-Bold",
@@ -344,7 +344,7 @@ CAPTION_STYLE_CONFIG = {
         "bg_opacity": 0.9,
         "padding": 12,
         "animation": "box-slide",
-        "position": "bottom",
+        "position": "center",
     },
     "no-captions": {
         "enabled": False,

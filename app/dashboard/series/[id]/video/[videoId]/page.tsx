@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Breadcrumb from '@/components/Breadcrumb'
 import MobileMenuButton from '@/components/MobileMenuButton'
-import { Download, Edit, Play, Pause, Volume2, VolumeX, Check, Clock, AlertCircle, Save } from 'lucide-react'
+import { Download, Play, Check, Clock, AlertCircle, Save, Loader2 } from 'lucide-react'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface VideoData {
   id: string
@@ -39,8 +41,12 @@ export default function VideoDetailPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [seriesName, setSeriesName] = useState('')
+  const [videoObjectUrl, setVideoObjectUrl] = useState<string | null>(null)
   
   const [video, setVideo] = useState<VideoData | null>(null)
   const [formData, setFormData] = useState({
@@ -76,6 +82,15 @@ export default function VideoDetailPage() {
         }
       })
       
+      // Also fetch series info for breadcrumb
+      const seriesRes = await fetch(`${API_URL}/api/series/${params.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (seriesRes.ok) {
+        const seriesData = await seriesRes.json()
+        setSeriesName(seriesData.name || seriesData.title || 'Series')
+      }
+
       if (response.ok) {
         const data = await response.json()
         
@@ -83,7 +98,7 @@ export default function VideoDetailPage() {
           id: data.id,
           title: data.title || 'Untitled Video',
           description: data.description || '',
-          video_url: data.videoPath || '/sample-video.mp4',
+          video_url: data.videoPath ? `${API_URL}/api/videos/${data.id}/stream` : '',
           thumbnail: data.thumbnailPath || '/placeholder-video.jpg',
           duration: Math.floor(data.durationSeconds || 60),
           rendered: data.status === 'ready' || data.status === 'published',
@@ -118,6 +133,22 @@ export default function VideoDetailPage() {
           commercial: videoData.metadata.commercial,
           ai_disclosure: videoData.metadata.ai_disclosure
         })
+
+        // Fetch video blob for player if video file exists
+        if (data.videoPath) {
+          try {
+            const videoRes = await fetch(`${API_URL}/api/videos/${data.id}/stream`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (videoRes.ok) {
+              const blob = await videoRes.blob()
+              const url = URL.createObjectURL(blob)
+              setVideoObjectUrl(url)
+            }
+          } catch (e) {
+            console.error('Failed to load video stream:', e)
+          }
+        }
       }
       
       setLoading(false)
@@ -127,20 +158,74 @@ export default function VideoDetailPage() {
     }
   }
 
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl)
+    }
+  }, [videoObjectUrl])
+
   const handleSave = async () => {
     setSaving(true)
     try {
-      // TODO: API call to save metadata
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      console.log('Saved:', formData)
+      const token = localStorage.getItem('reelflow_access_token')
+      const res = await fetch(`${API_URL}/api/series/${params.id}/videos/${params.videoId}/metadata`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description
+        })
+      })
+      if (!res.ok) throw new Error('Failed to save')
+    } catch (err) {
+      console.error('Save failed:', err)
     } finally {
       setSaving(false)
     }
   }
 
   const handlePublishAgain = async () => {
-    // TODO: API call to republish
-    console.log('Publishing again...')
+    setPublishing(true)
+    try {
+      const token = localStorage.getItem('reelflow_access_token')
+      const res = await fetch(`${API_URL}/api/video/${params.videoId}/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!res.ok) throw new Error('Failed to publish')
+    } catch (err) {
+      console.error('Publish failed:', err)
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    try {
+      const token = localStorage.getItem('reelflow_access_token')
+      const res = await fetch(`${API_URL}/api/videos/${params.videoId}/download`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!res.ok) throw new Error('Download failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${video?.title || 'video'}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Download failed:', err)
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -163,7 +248,7 @@ export default function VideoDetailPage() {
 
   const breadcrumbItems = [
     { label: 'Series', href: '/dashboard' },
-    { label: 'Dark Mysteries', href: `/dashboard/series/${params.id}` },
+    { label: seriesName || 'Series', href: `/dashboard/series/${params.id}` },
     { label: video?.title || 'Video' }
   ]
 
@@ -203,41 +288,34 @@ export default function VideoDetailPage() {
                 
                 {/* Video Player */}
                 <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden relative group">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Play className="w-16 h-16 text-white opacity-80" />
-                  </div>
-                  
-                  {/* Controls */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="flex items-center justify-between text-white">
-                      <button
-                        onClick={() => setPlaying(!playing)}
-                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                      >
-                        {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                      </button>
-                      <button
-                        onClick={() => setMuted(!muted)}
-                        className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                      >
-                        {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                      </button>
+                  {videoObjectUrl ? (
+                    <video
+                      ref={videoRef}
+                      src={videoObjectUrl}
+                      className="w-full h-full object-contain"
+                      controls
+                      muted={muted}
+                      playsInline
+                      onPlay={() => setPlaying(true)}
+                      onPause={() => setPlaying(false)}
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60">
+                      <Play className="w-16 h-16 mb-2" />
+                      <span className="text-sm">No preview available</span>
                     </div>
-                    <div className="mt-2 h-1 bg-white/30 rounded-full">
-                      <div className="h-full w-1/3 bg-emerald-500 rounded-full" />
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Actions */}
                 <div className="mt-4 space-y-2">
-                  <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-colors">
+                  <button
+                    onClick={handleDownload}
+                    disabled={!video.rendered}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <Download className="w-4 h-4" />
                     <span>Download Video</span>
-                  </button>
-                  <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 border-2 border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-semibold rounded-lg transition-colors">
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Video</span>
                   </button>
                 </div>
 
@@ -416,9 +494,11 @@ export default function VideoDetailPage() {
                       </button>
                       <button
                         onClick={handlePublishAgain}
-                        className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors"
+                        disabled={publishing || !video.rendered}
+                        className="flex items-center space-x-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
                       >
-                        Publish Again
+                        {publishing && <Loader2 className="w-4 h-4 animate-spin" />}
+                        <span>{publishing ? 'Publishing...' : 'Publish Again'}</span>
                       </button>
                     </div>
                   </div>

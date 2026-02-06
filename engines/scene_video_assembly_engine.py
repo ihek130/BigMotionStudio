@@ -191,7 +191,7 @@ class SceneVideoAssemblyEngine:
         
         try:
             # Initialize caption engine
-            caption_engine = CaptionEngine(self.config)
+            caption_engine = CaptionEngine()
             
             # Get script text for fallback
             full_script = " ".join(scene.narration for scene in script_data.scenes)
@@ -466,9 +466,8 @@ class SceneVideoAssemblyEngine:
                     align='center'
                 )
                 
-                # Position at bottom
-                text_clip = text_clip.set_position(('center', 'bottom'))
-                text_clip = text_clip.margin(bottom=150, opacity=0)
+                # Position at vertical center of screen
+                text_clip = text_clip.set_position(('center', 'center'))
                 
                 # Set timing
                 text_clip = text_clip.set_start(scene.start_time)

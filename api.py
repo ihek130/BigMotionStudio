@@ -101,8 +101,8 @@ app.include_router(instagram_oauth_router)
 # Initialize video generator (singleton)
 generator: Optional[SaaSVideoGenerator] = None
 
-# Job tracking
-jobs: Dict[str, Dict] = {}
+# Job tracking (deprecated - DB-based tracking used now)
+# jobs: Dict[str, Dict] = {}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -337,6 +337,156 @@ async def upgrade_series_count(
         "series_purchased": new_count,
         "message": f"Successfully upgraded to {new_count} series"
     }
+
+
+@app.patch("/api/series/{series_id}/status")
+async def update_series_status(
+    series_id: str,
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Toggle series between active and paused."""
+    from database.models import Series as SeriesModel
+    
+    series = db.query(SeriesModel).filter(
+        SeriesModel.id == series_id,
+        SeriesModel.user_id == str(current_user.id)
+    ).first()
+    
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    
+    series.status = "paused" if series.status == "active" else "active"
+    db.commit()
+    
+    return {"success": True, "status": series.status}
+
+
+@app.delete("/api/series/{series_id}")
+async def delete_series(
+    series_id: str,
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete a series and all its videos."""
+    from database.models import Series as SeriesModel
+    
+    series = db.query(SeriesModel).filter(
+        SeriesModel.id == series_id,
+        SeriesModel.user_id == str(current_user.id)
+    ).first()
+    
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    
+    db.delete(series)
+    db.commit()
+    
+    return {"success": True, "message": "Series deleted"}
+
+
+@app.post("/api/series/{series_id}/generate")
+async def generate_video_for_series(
+    series_id: str,
+    background_tasks: BackgroundTasks,
+    db = Depends(get_db),
+    current_user: User = Depends(require_can_generate_video)
+):
+    """Manually trigger video generation for a series."""
+    from database.models import Series as SeriesModel, Video as VideoModel, Job as JobModel
+    
+    series = db.query(SeriesModel).filter(
+        SeriesModel.id == series_id,
+        SeriesModel.user_id == str(current_user.id)
+    ).first()
+    
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    
+    if series.status != "active":
+        raise HTTPException(status_code=400, detail="Series is paused. Resume it first.")
+    
+    # Increment video counter
+    current_user.videos_generated_this_month += 1
+    current_user.videos_generated_total += 1
+    current_user.last_video_at = datetime.now()
+    db.commit()
+    
+    # Create video record
+    video = VideoModel(
+        series_id=str(series.id),
+        status="generating",
+        progress=0,
+        current_stage="initializing"
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+    
+    # Create job for tracking
+    job = JobModel(
+        video_id=str(video.id),
+        job_type="video_generation",
+        status="pending",
+        stage="initializing"
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Trigger background generation
+    background_tasks.add_task(
+        process_video_generation_db,
+        job_id=str(job.id),
+        video_id=str(video.id),
+        series_id=str(series.id),
+        user_id=str(current_user.id)
+    )
+    
+    return {
+        "job_id": str(job.id),
+        "video_id": str(video.id),
+        "status": "pending",
+        "message": "Video generation started"
+    }
+
+
+@app.patch("/api/series/{series_id}/videos/{video_id}/metadata")
+async def update_video_metadata(
+    series_id: str,
+    video_id: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update video title and description."""
+    from database.models import Video as VideoModel, Series as SeriesModel
+    
+    series = db.query(SeriesModel).filter(
+        SeriesModel.id == series_id,
+        SeriesModel.user_id == str(current_user.id)
+    ).first()
+    
+    if not series:
+        raise HTTPException(status_code=404, detail="Series not found")
+    
+    video = db.query(VideoModel).filter(
+        VideoModel.id == video_id,
+        VideoModel.series_id == series_id
+    ).first()
+    
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    if title is not None:
+        video.title = title
+    if description is not None:
+        video.description = description
+    
+    db.commit()
+    
+    return {"success": True, "message": "Metadata updated"}
 
 
 @app.get("/api/series/{series_id}")
@@ -591,56 +741,14 @@ async def get_upload_status(
     }
 
 
-@app.post("/api/video/generate", response_model=JobResponse)
-async def generate_video(
-    request: GenerateVideoRequest,
-    background_tasks: BackgroundTasks,
-    db = Depends(get_db),
-    current_user: User = Depends(require_can_generate_video)  # CHECK VIDEO LIMIT
-):
-    """
-    Trigger video generation for a series.
-    Enforces monthly video limits based on user's subscription plan.
-    Returns immediately with job ID, processes in background.
-    """
-    # Increment video counter
-    current_user.videos_generated_this_month += 1
-    current_user.videos_generated_total += 1
-    current_user.last_video_at = datetime.now()
-    db.commit()
-    
-    logger.info(f"User {current_user.email} generating video {current_user.videos_generated_this_month}/{current_user.plan_limits['videos_per_month']}")
-    
-    job_id = str(uuid.uuid4())
-    
-    # Initialize job tracking
-    jobs[job_id] = {
-        "status": "pending",
-        "progress": 0,
-        "stage": "initializing",
-        "result": None,
-        "error": None,
-        "created_at": datetime.now().isoformat()
-    }
-    
-    # Start background task
-    background_tasks.add_task(
-        process_video_generation,
-        job_id,
-        request.user_id,
-        request.series_id,
-        request.topic
-    )
-    
-    return JobResponse(
-        job_id=job_id,
-        status="pending",
-        message="Video generation started"
-    )
+# Legacy endpoint removed - use POST /api/series/{series_id}/generate instead
 
 
 @app.post("/api/video/generate-sync", response_model=VideoResponse)
-async def generate_video_sync(request: CreateSeriesRequest):
+async def generate_video_sync(
+    request: CreateSeriesRequest,
+    current_user: User = Depends(get_current_active_user)
+):
     """
     Synchronous video generation (for testing).
     Waits for completion before returning.
@@ -672,22 +780,36 @@ async def generate_video_sync(request: CreateSeriesRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/job/{job_id}", response_model=JobStatusResponse)
-async def get_job_status(job_id: str):
-    """Get status of a video generation job"""
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = jobs[job_id]
-    
-    return JobStatusResponse(
-        job_id=job_id,
-        status=job["status"],
-        progress=job["progress"],
-        stage=job["stage"],
-        result=job["result"],
-        error=job["error"]
+# Legacy job polling endpoint removed - use database-backed video status polling instead
+
+
+@app.get("/api/videos")
+async def list_all_user_videos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    List all videos across all series for the current user.
+    """
+    from database.models import Video as VideoModel, Series as SeriesModel
+
+    videos = (
+        db.query(VideoModel)
+        .join(SeriesModel, VideoModel.series_id == SeriesModel.id)
+        .filter(SeriesModel.user_id == str(current_user.id))
+        .order_by(VideoModel.created_at.desc())
+        .all()
     )
+
+    result = []
+    for v in videos:
+        vd = v.to_dict()
+        vd["seriesName"] = v.series.name if v.series else "Unknown"
+        vd["seriesId"] = v.series_id
+        result.append(vd)
+
+    return {"videos": result}
+
 
 @app.get("/api/videos/{video_id}/stream")
 async def stream_video(
@@ -764,97 +886,12 @@ async def download_video(
         }
     )
 
-@app.get("/api/videos/{user_id}")
-async def list_user_videos(user_id: str):
-    """List all generated videos for a user"""
-    # In production, query database
-    # For now, scan output directory
-    
-    output_dir = "output"
-    videos = []
-    
-    if os.path.exists(output_dir):
-        for project_id in os.listdir(output_dir):
-            project_path = os.path.join(output_dir, project_id)
-            if os.path.isdir(project_path):
-                video_path = os.path.join(project_path, "final_video.mp4")
-                if os.path.exists(video_path):
-                    videos.append({
-                        "project_id": project_id,
-                        "video_path": video_path,
-                        "created_at": datetime.fromtimestamp(
-                            os.path.getctime(video_path)
-                        ).isoformat()
-                    })
-    
-    return {"videos": videos}
+# Legacy endpoint removed - use GET /api/videos instead
 
 
 # ═══════════════════════════════════════════════════════════
 # Background Task Processing
 # ═══════════════════════════════════════════════════════════
-
-async def process_video_generation(
-    job_id: str,
-    user_id: str,
-    series_id: str,
-    topic: Optional[str]
-):
-    """
-    Background task to generate video.
-    Updates job status as it progresses.
-    """
-    try:
-        jobs[job_id]["status"] = "processing"
-        
-        # For demo, create default settings
-        # In production, load from database based on series_id
-        settings = UserSeriesSettings(
-            user_id=user_id,
-            series_id=series_id,
-            series_name="Generated Series",
-            series_description="",
-            niche="scary-stories",
-            visual_style="dark-comic",
-            voice_id="male-deep",
-            video_duration=60,
-        )
-        
-        # Update progress stages
-        stages = [
-            ("script", 10),
-            ("images", 40),
-            ("voiceover", 60),
-            ("assembly", 80),
-            ("thumbnail", 90),
-            ("seo", 95),
-            ("complete", 100)
-        ]
-        
-        # Run generation (blocking, but in background thread)
-        result = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: generator.generate_video(settings, topic)
-        )
-        
-        # Update job with result
-        jobs[job_id]["status"] = "completed"
-        jobs[job_id]["progress"] = 100
-        jobs[job_id]["stage"] = "complete"
-        jobs[job_id]["result"] = {
-            "project_id": result.project_id,
-            "video_path": result.video_path,
-            "thumbnail_path": result.thumbnail_path,
-            "title": result.title,
-            "duration_seconds": result.duration_seconds,
-            "scene_count": result.scene_count,
-        }
-        
-    except Exception as e:
-        logger.error(f"Job {job_id} failed: {e}")
-        jobs[job_id]["status"] = "failed"
-        jobs[job_id]["error"] = str(e)
-
 
 async def process_video_generation_db(
     job_id: str,
@@ -896,7 +933,7 @@ async def process_video_generation_db(
             niche_format=series.niche_format,
             visual_style=series.visual_style,
             voice_id=series.voice_id,
-            music_id=series.music_track,
+            music_track=series.music_track,
             caption_style=series.caption_style,
             video_duration=series.video_duration,
         )

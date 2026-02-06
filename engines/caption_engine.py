@@ -37,7 +37,7 @@ ASS_STYLE_CONFIG = {
         "bold": -1,  # -1 = true
         "outline": 4,
         "shadow": 2,
-        "alignment": 2,  # Bottom center
+        "alignment": 5,  # Middle center (vertical center of screen)
         "margin_v": 60,
         "blur": 0,
         "animation": "pop",  # Word appears with slight scale
@@ -65,7 +65,7 @@ ASS_STYLE_CONFIG = {
         "bold": 0,
         "outline": 2,
         "shadow": 1,
-        "alignment": 2,
+        "alignment": 5,  # Middle center
         "margin_v": 50,
         "blur": 0,
         "animation": "fade",
@@ -79,7 +79,7 @@ ASS_STYLE_CONFIG = {
         "bold": -1,
         "outline": 0,
         "shadow": 0,
-        "alignment": 2,
+        "alignment": 5,  # Middle center
         "margin_v": 55,
         "blur": 0,
         "border_style": 3,  # Opaque box
@@ -110,7 +110,7 @@ ASS_STYLE_CONFIG = {
         "bold": -1,
         "outline": 8,  # Thick outline
         "shadow": 0,
-        "alignment": 2,
+        "alignment": 5,  # Middle center
         "margin_v": 60,
         "blur": 0,
         "animation": "slide",
@@ -124,7 +124,7 @@ ASS_STYLE_CONFIG = {
         "bold": -1,
         "outline": 0,
         "shadow": 0,
-        "alignment": 2,
+        "alignment": 5,  # Middle center
         "margin_v": 50,
         "blur": 0,
         "border_style": 3,  # Opaque box
@@ -142,7 +142,7 @@ class CaptionEngine:
     and renders them as styled ASS subtitles
     """
     
-    def __init__(self):
+    def __init__(self, config=None):
         self.deepgram_api_key = os.getenv('DEEPGRAM_API_KEY')
         
         if not self.deepgram_api_key:
@@ -155,6 +155,12 @@ class CaptionEngine:
         # Caption settings
         self.words_per_group = 4  # Words shown at once
         self.min_display_time = 0.3  # Minimum time per word group
+        
+        # Apply optional config overrides
+        if config and isinstance(config, dict):
+            self.video_width = config.get('video_width', self.video_width)
+            self.video_height = config.get('video_height', self.video_height)
+            self.words_per_group = config.get('words_per_group', self.words_per_group)
     
     def transcribe_audio(self, audio_path: str) -> List[WordTiming]:
         """
