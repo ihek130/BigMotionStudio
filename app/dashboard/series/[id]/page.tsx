@@ -50,8 +50,30 @@ export default function SeriesDetailPage() {
   const [seriesStatus, setSeriesStatus] = useState('active')
   const [videos, setVideos] = useState<Video[]>([])
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({})
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('reelflow_access_token') : null
+
+  // Fetch thumbnail blob URLs for ready videos
+  const fetchThumbnails = async (videoList: Video[]) => {
+    const token = getToken()
+    if (!token) return
+    const readyVideos = videoList.filter(v => v.status === 'ready' || v.status === 'published')
+    const newUrls: Record<string, string> = { ...thumbnailUrls }
+    await Promise.all(readyVideos.map(async (v) => {
+      if (newUrls[v.id]) return // already fetched
+      try {
+        const res = await fetch(`${API_URL}/api/videos/${v.id}/thumbnail`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (res.ok) {
+          const blob = await res.blob()
+          newUrls[v.id] = URL.createObjectURL(blob)
+        }
+      } catch { /* ignore */ }
+    }))
+    setThumbnailUrls(newUrls)
+  }
 
   useEffect(() => {
     fetchSeriesData()
@@ -84,7 +106,7 @@ export default function SeriesDetailPage() {
         setSeriesStatus(data.status)
 
         if (data.videos) {
-          setVideos(data.videos.map((v: any) => ({
+          const videoList = data.videos.map((v: any) => ({
             id: v.id,
             title: v.title || 'Untitled Video',
             thumbnail: v.thumbnailPath || '',
@@ -98,7 +120,9 @@ export default function SeriesDetailPage() {
               ...(v.tiktokUrl ? { tiktok: 'published' as const } : {}),
               ...(v.instagramUrl ? { instagram: 'published' as const } : {})
             }
-          })))
+          }))
+          setVideos(videoList)
+          fetchThumbnails(videoList)
         }
 
         // Fetch real connected accounts
@@ -263,34 +287,44 @@ export default function SeriesDetailPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                   {videos.map((video) => (
-                    <div key={video.id} className="group relative bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-all border-2 border-transparent hover:border-emerald-500">
+                    <div key={video.id} className="group relative bg-gray-100 rounded-lg overflow-hidden hover:shadow-lg transition-all border border-gray-200 hover:border-emerald-500 max-w-[200px]">
                       {video.status === 'generating' || video.status === 'pending' ? (
                         <div className="aspect-[9/16] bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center">
-                          <Loader2 className="w-10 h-10 text-emerald-400 animate-spin mb-3" />
-                          <p className="text-white text-sm font-medium">Generating...</p>
-                          <p className="text-gray-400 text-xs mt-1 capitalize">{video.currentStage || 'Initializing'}</p>
+                          <Loader2 className="w-6 h-6 text-emerald-400 animate-spin mb-2" />
+                          <p className="text-white text-xs font-medium">Generating...</p>
+                          <p className="text-gray-400 text-[10px] mt-0.5 capitalize">{video.currentStage || 'Initializing'}</p>
                           {video.progress > 0 && (
-                            <div className="mt-3 w-3/4 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div className="mt-2 w-3/4 h-1 bg-gray-700 rounded-full overflow-hidden">
                               <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${video.progress}%` }} />
                             </div>
                           )}
                         </div>
                       ) : video.status === 'failed' ? (
                         <div className="aspect-[9/16] bg-gradient-to-br from-red-900 to-red-950 flex flex-col items-center justify-center">
-                          <AlertCircle className="w-10 h-10 text-red-400 mb-3" />
-                          <p className="text-white text-sm font-medium">Generation Failed</p>
+                          <AlertCircle className="w-6 h-6 text-red-400 mb-2" />
+                          <p className="text-white text-xs font-medium">Failed</p>
                         </div>
                       ) : (
                         <button
                           onClick={() => router.push(`/dashboard/series/${params.id}/video/${video.id}`)}
                           className="w-full text-left"
                         >
-                          <div className="aspect-[9/16] bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center relative">
-                            <Play className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="aspect-[9/16] bg-gradient-to-br from-gray-200 to-gray-300 relative overflow-hidden">
+                            {thumbnailUrls[video.id] && (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={thumbnailUrls[video.id]}
+                                alt={video.title}
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
+                            )}
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                              <Play className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                            </div>
                             {video.duration > 0 && (
-                              <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                              <div className="absolute top-1.5 right-1.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
                                 {video.duration}s
                               </div>
                             )}
@@ -298,14 +332,14 @@ export default function SeriesDetailPage() {
                         </button>
                       )}
 
-                      <div className="p-3">
-                        <h3 className="font-semibold text-sm text-gray-900 line-clamp-2 text-left mb-1">
+                      <div className="p-2">
+                        <h3 className="font-semibold text-xs text-gray-900 line-clamp-2 text-left mb-1">
                           {video.title}
                         </h3>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-1">
+                          <div className="flex items-center space-x-0.5">
                             {Object.entries(video.platforms).map(([platform, status]) => (
-                              <div key={platform} className={`text-xs px-2 py-0.5 rounded ${
+                              <div key={platform} className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 status === 'published' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                               }`}>{platform}</div>
                             ))}

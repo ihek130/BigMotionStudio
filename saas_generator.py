@@ -205,21 +205,25 @@ class SaaSVideoGenerator:
             self.logger.info(f"Video assembled: {video_data['duration_seconds']:.2f}s")
             
             # ═══════════════════════════════════════════════════════════
-            # STAGE 5: Thumbnail Generation (DISABLED FOR SHORTS)
+            # STAGE 5: Thumbnail (use first scene image — no extra credits)
             # ═══════════════════════════════════════════════════════════
-            # YouTube Shorts don't use custom thumbnails - saves image generation credits
-            self.logger.info("Stage 5: Skipping thumbnail (Shorts don't use custom thumbnails)")
             thumbnail_path = None
-            
-            # Uncomment below if you need thumbnails for regular videos or dashboard previews:
-            # self.logger.info("Stage 5: Generating thumbnail...")
-            # thumbnail_path = os.path.join(project_dir, "thumbnail.png")
-            # self.image_engine.generate_thumbnail(
-            #     script_data=script_data,
-            #     settings=settings,
-            #     output_path=thumbnail_path
-            # )
-            # self.logger.info(f"Thumbnail generated: {thumbnail_path}")
+            try:
+                first_scene = script_data.scenes[0] if script_data.scenes else None
+                first_image = None
+                if first_scene:
+                    first_image = first_scene.cropped_image_path or first_scene.image_path
+                
+                if first_image and os.path.exists(first_image):
+                    import shutil
+                    thumbnail_path = os.path.join(project_dir, "thumbnail.png")
+                    shutil.copy2(first_image, thumbnail_path)
+                    self.logger.info(f"Thumbnail saved from first scene: {thumbnail_path}")
+                else:
+                    self.logger.warning("No scene image available for thumbnail")
+            except Exception as thumb_err:
+                self.logger.warning(f"Failed to save thumbnail: {thumb_err}")
+                thumbnail_path = None
             
             # ═══════════════════════════════════════════════════════════
             # STAGE 6: SEO Metadata Generation

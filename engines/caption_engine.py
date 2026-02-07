@@ -558,40 +558,52 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             Path to output video
         """
         import subprocess
+        import platform
         
         logger.info(f"Burning captions into video: {output_path}")
         
-        # Escape path for FFmpeg filter
-        ass_path_escaped = ass_path.replace('\\', '/').replace(':', '\\:')
+        # Escape path for FFmpeg ASS filter
+        # On Linux: colons in paths need escaping, backslashes aren't used
+        # On Windows: backslashes become forward slashes, colons need escaping
+        ass_path_escaped = ass_path.replace('\\', '/')
+        if platform.system() == 'Windows':
+            ass_path_escaped = ass_path_escaped.replace(':', '\\:')
+        # For Linux, escape colons and special chars
+        else:
+            ass_path_escaped = ass_path_escaped.replace(':', '\\:')
+            ass_path_escaped = ass_path_escaped.replace("'", "\\'")
         
         cmd = [
             'ffmpeg', '-y',
             '-i', video_path,
-            '-vf', f"ass='{ass_path_escaped}'",
+            '-vf', f"ass={ass_path_escaped}",
             '-c:a', 'copy',
             '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-crf', '20',
+            '-preset', 'ultrafast',
+            '-crf', '23',
+            '-threads', '4',
             output_path
         ]
+        
+        logger.info(f"FFmpeg command: {' '.join(cmd)}")
         
         try:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=600
             )
             
             if result.returncode != 0:
-                logger.error(f"FFmpeg error: {result.stderr}")
-                raise Exception(f"FFmpeg failed: {result.stderr}")
+                logger.error(f"FFmpeg stderr: {result.stderr[-1000:] if result.stderr else 'none'}")
+                raise Exception(f"FFmpeg failed with code {result.returncode}")
             
             logger.info(f"Captions burned successfully: {output_path}")
             return output_path
             
         except subprocess.TimeoutExpired:
-            logger.error("FFmpeg caption burn timed out")
+            logger.error("FFmpeg caption burn timed out after 600s")
             raise
         except Exception as e:
             logger.error(f"Error burning captions: {e}")

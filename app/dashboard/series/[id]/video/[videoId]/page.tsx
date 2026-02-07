@@ -47,6 +47,7 @@ export default function VideoDetailPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [seriesName, setSeriesName] = useState('')
   const [videoObjectUrl, setVideoObjectUrl] = useState<string | null>(null)
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   
   const [video, setVideo] = useState<VideoData | null>(null)
   const [formData, setFormData] = useState({
@@ -134,6 +135,17 @@ export default function VideoDetailPage() {
           ai_disclosure: videoData.metadata.ai_disclosure
         })
 
+        // Fetch thumbnail
+        try {
+          const thumbRes = await fetch(`${API_URL}/api/videos/${data.id}/thumbnail`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (thumbRes.ok) {
+            const blob = await thumbRes.blob()
+            setThumbnailUrl(URL.createObjectURL(blob))
+          }
+        } catch { /* ignore */ }
+
         // Fetch video blob for player if video file exists
         if (data.videoPath) {
           try {
@@ -158,12 +170,13 @@ export default function VideoDetailPage() {
     }
   }
 
-  // Cleanup blob URL on unmount
+  // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
       if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl)
+      if (thumbnailUrl) URL.revokeObjectURL(thumbnailUrl)
     }
-  }, [videoObjectUrl])
+  }, [videoObjectUrl, thumbnailUrl])
 
   const handleSave = async () => {
     setSaving(true)
@@ -292,6 +305,7 @@ export default function VideoDetailPage() {
                     <video
                       ref={videoRef}
                       src={videoObjectUrl}
+                      poster={thumbnailUrl || undefined}
                       className="w-full h-full object-contain"
                       controls
                       muted={muted}
@@ -299,6 +313,14 @@ export default function VideoDetailPage() {
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
                     />
+                  ) : thumbnailUrl ? (
+                    <div className="absolute inset-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={thumbnailUrl} alt="Video thumbnail" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <Play className="w-16 h-16 text-white/80" />
+                      </div>
+                    </div>
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60">
                       <Play className="w-16 h-16 mb-2" />

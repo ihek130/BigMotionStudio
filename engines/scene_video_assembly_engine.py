@@ -78,14 +78,32 @@ class SceneVideoAssemblyEngine:
         try:
             # Load voiceover audio
             voiceover = AudioFileClip(voiceover_data['audio_path'])
-            total_duration = voiceover.duration
+            voiceover_duration = voiceover.duration
             
-            logger.info(f"Voiceover duration: {total_duration:.2f}s")
+            # ═══════════════════════════════════════════════════════════
+            # DURATION ENFORCEMENT: Video must match user's selected duration
+            # ═══════════════════════════════════════════════════════════
+            target_duration = float(settings.video_duration)
+            total_duration = max(voiceover_duration, target_duration)
             
-            # Calculate scene timings based on voiceover duration
+            logger.info(f"Voiceover: {voiceover_duration:.2f}s | Target: {target_duration:.0f}s | Video duration: {total_duration:.2f}s")
+            
+            if voiceover_duration < target_duration:
+                logger.info(f"Voiceover is {target_duration - voiceover_duration:.1f}s shorter than target — extending scenes to fill {total_duration:.0f}s")
+            elif voiceover_duration > target_duration * 1.15:
+                logger.warning(f"Voiceover is {voiceover_duration - target_duration:.1f}s longer than target — video will be {total_duration:.0f}s")
+            
+            # Account for crossfade overlap: compose method loses (n-1)*crossfade seconds
+            num_scenes = len(script_data.scenes)
+            crossfade_loss = (num_scenes - 1) * self.crossfade_duration if num_scenes > 1 else 0
+            scene_duration_sum = total_duration + crossfade_loss
+            
+            logger.info(f"Crossfade compensation: +{crossfade_loss:.1f}s across {num_scenes - 1} transitions")
+            
+            # Calculate scene timings (compensated for crossfade)
             scenes_with_timing = self._calculate_scene_timings(
                 script_data.scenes,
-                total_duration
+                scene_duration_sum
             )
             
             # Create video clips for each scene
@@ -93,6 +111,16 @@ class SceneVideoAssemblyEngine:
             
             # Concatenate with crossfades
             video_sequence = self._concatenate_with_transitions(video_clips)
+            
+            # ═══════════════════════════════════════════════════════════
+            # ENFORCE EXACT DURATION: Ensure video matches target precisely
+            # ═══════════════════════════════════════════════════════════
+            actual_sequence_duration = video_sequence.duration
+            logger.info(f"Raw sequence duration: {actual_sequence_duration:.2f}s (target: {total_duration:.2f}s)")
+            
+            if abs(actual_sequence_duration - total_duration) > 0.5:
+                logger.info(f"Adjusting video duration from {actual_sequence_duration:.2f}s to {total_duration:.2f}s")
+                video_sequence = video_sequence.set_duration(total_duration)
             
             # Add fade in/out to video
             video_sequence = video_sequence.fx(fadein, self.fade_in_duration)

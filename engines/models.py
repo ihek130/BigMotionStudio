@@ -108,8 +108,13 @@ class UserSeriesSettings:
     platforms: List[str] = field(default_factory=lambda: ["youtube"])
     
     def get_word_count_target(self) -> tuple:
-        """Calculate target word count based on duration (avg 2.5 words/sec)"""
-        base = int(self.video_duration * 2.5)
+        """Calculate target word count based on duration.
+        
+        Uses ~2.8 words/sec to ensure voiceover fills the target duration
+        even with slower TTS speeds (0.85-0.95x). Slightly over-generating
+        is better than under-generating — assembly enforces exact duration.
+        """
+        base = int(self.video_duration * 2.8)
         return (int(base * 0.9), int(base * 1.1))
     
     def get_scene_count_range(self) -> tuple:

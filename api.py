@@ -811,6 +811,43 @@ async def list_all_user_videos(
     return {"videos": result}
 
 
+@app.get("/api/videos/{video_id}/thumbnail")
+async def get_video_thumbnail(
+    video_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Serve video thumbnail image (first scene image).
+    """
+    from fastapi.responses import FileResponse
+    from database.models import Video as VideoModel
+    
+    video = db.query(VideoModel).filter(VideoModel.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if str(video.series.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Try explicit thumbnail_path first
+    if video.thumbnail_path and os.path.exists(video.thumbnail_path):
+        return FileResponse(video.thumbnail_path, media_type="image/png")
+    
+    # Fallback: look for thumbnail.png or first scene in project dir
+    if video.project_dir:
+        output_dir = os.path.join("output", video.project_dir)
+        thumb_path = os.path.join(output_dir, "thumbnail.png")
+        if os.path.exists(thumb_path):
+            return FileResponse(thumb_path, media_type="image/png")
+        
+        # Last resort: first scene image from temp
+        temp_scene = os.path.join("temp", video.project_dir, "scenes", "scene_01.png")
+        if os.path.exists(temp_scene):
+            return FileResponse(temp_scene, media_type="image/png")
+    
+    raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+
 @app.get("/api/videos/{video_id}/stream")
 async def stream_video(
     video_id: str,

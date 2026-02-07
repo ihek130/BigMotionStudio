@@ -24,9 +24,9 @@ AUDIXA_VOICE_MAP = {
         "description": "Deep & Commanding",
         "gender": "male",
         "settings": {
-            "emotion": "neutral",  # Calm/eerie delivery for horror
-            "temperature": 0.75,   # Adds expressiveness variation
-            "speed": 0.95,         # Slightly slower for suspense
+            "emotion": "neutral",
+            "temperature": 0.75,
+            "speed": 0.85,
         }
     },
     "bm_harry": {
@@ -37,7 +37,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "happy",
             "temperature": 0.7,
-            "speed": 1.0,
+            "speed": 0.9,
         }
     },
     "am_eric": {
@@ -48,7 +48,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "neutral",
             "temperature": 0.65,
-            "speed": 1.0,
+            "speed": 0.9,
         }
     },
     "am_ethan": {
@@ -59,7 +59,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "happy",
             "temperature": 0.75,
-            "speed": 1.05,
+            "speed": 0.92,
         }
     },
     "bm_oliver": {
@@ -70,7 +70,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "neutral",
             "temperature": 0.65,
-            "speed": 1.0,
+            "speed": 0.9,
         }
     },
     "af_aria": {
@@ -81,7 +81,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "neutral",
             "temperature": 0.6,
-            "speed": 0.95,
+            "speed": 0.88,
         }
     },
     "af_bella": {
@@ -92,7 +92,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "happy",
             "temperature": 0.75,
-            "speed": 1.05,
+            "speed": 0.92,
         }
     },
     "af_lily": {
@@ -103,7 +103,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "neutral",
             "temperature": 0.65,
-            "speed": 1.0,
+            "speed": 0.9,
         }
     },
     "af_zoey": {
@@ -114,7 +114,7 @@ AUDIXA_VOICE_MAP = {
         "settings": {
             "emotion": "surprised",
             "temperature": 0.8,
-            "speed": 1.1,
+            "speed": 0.95,
         }
     },
 }
@@ -340,24 +340,10 @@ class AudixaTTSEngine:
         return chunks
     
     def _add_natural_pauses(self, text: str) -> str:
-        """Add natural pauses for better pacing and sanitize text"""
+        """Sanitize text for TTS - no artificial pauses added"""
         
-        import re
-        
-        # First, sanitize the text - fix common encoding issues
+        # Only sanitize encoding issues, don't modify pacing
         text = self._sanitize_text(text)
-        
-        # Add pause after periods (longer pause)
-        text = re.sub(r'\.(\s+)', r'. \1', text)
-        
-        # Add slight pause after commas
-        text = re.sub(r',(\s+)', r', \1', text)
-        
-        # Add dramatic pause after ellipses
-        text = re.sub(r'\.\.\.', '... ', text)
-        
-        # Add pause after question marks
-        text = re.sub(r'\?(\s+)', r'? \1', text)
         
         return text
     
