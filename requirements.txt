@@ -60,3 +60,6 @@ email-validator>=2.1.0
 
 # Caption/Transcription (Deepgram)
 deepgram-sdk>=3.0.0
+
+# Payment (Polar.sh)
+polar-sdk>=0.28.0

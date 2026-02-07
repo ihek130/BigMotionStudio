@@ -38,8 +38,6 @@ class SignupRequest(BaseModel):
     email: EmailStr
     password: str
     name: Optional[str] = None
-    plan: Optional[str] = "launch"  # launch, grow, scale
-    series_count: Optional[int] = 1  # Number of series user is purchasing
 
 
 class LoginRequest(BaseModel):
@@ -147,18 +145,13 @@ async def signup(
             detail="Password must be at least 8 characters long"
         )
     
-    # Validate plan
-    valid_plans = ["launch", "grow", "scale"]
-    plan = request.plan if request.plan in valid_plans else "launch"
-    series_count = max(1, request.series_count or 1)  # Minimum 1 series
-    
-    # Create user
+    # Create user (free plan by default - must pay to upgrade)
     user = User(
         email=request.email.lower(),
         password_hash=hash_password(request.password),
         name=request.name,
-        plan=plan,
-        series_purchased=series_count,
+        plan="free",
+        series_purchased=0,
         verification_token=generate_verification_token(),
         verification_token_expires=get_verification_expiry(),
         email_verified=False  # Will be True after email verification
@@ -570,7 +563,8 @@ async def google_auth_callback(
                     avatar_url=avatar,
                     google_id=google_id,
                     email_verified=True,
-                    plan="launch"
+                    plan="free",
+                    series_purchased=0
                 )
                 db.add(user)
         
@@ -695,7 +689,8 @@ async def github_auth_callback(
                     avatar_url=avatar,
                     github_id=github_id,
                     email_verified=True,
-                    plan="launch"
+                    plan="free",
+                    series_purchased=0
                 )
                 db.add(user)
         

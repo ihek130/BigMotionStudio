@@ -10,9 +10,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  plan: 'launch' | 'grow' | 'scale';
+  plan: 'free' | 'launch' | 'grow' | 'scale';
   is_admin: boolean;
   is_verified: boolean;
+  series_purchased: number;
   videos_generated_this_month: number;
   total_videos_generated: number;
   profile_image?: string;
@@ -20,6 +21,7 @@ export interface User {
   plan_limits: {
     videos_per_month: number;
     max_series: number;
+    series_limit: number;
     can_generate: boolean;
     remaining_videos: number;
   };

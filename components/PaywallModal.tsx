@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 interface PaywallModalProps {
@@ -22,9 +22,8 @@ const PLANS = [
       '12 videos per month',
       '1 video series',
       'All caption styles',
-      'All voice options',
+      'Custom AI voiceover',
       'YouTube, TikTok, Instagram',
-      'Email support'
     ]
   },
   {
@@ -32,16 +31,14 @@ const PLANS = [
     name: 'Grow',
     price: 39,
     videos: 30,
-    series: 3,
+    series: '1+',
     popular: true,
     features: [
       '30 videos per month',
-      '3 video series',
+      'Add extra series',
       'All caption styles',
-      'All voice options',
+      'Custom AI voiceover',
       'YouTube, TikTok, Instagram',
-      'Priority support',
-      'Analytics dashboard'
     ]
   },
   {
@@ -49,25 +46,27 @@ const PLANS = [
     name: 'Scale',
     price: 69,
     videos: 60,
-    series: 5,
+    series: '1+',
     features: [
       '60 videos per month',
-      '5 video series',
+      'Add extra series',
       'All caption styles',
-      'All voice options',
+      'Custom AI voiceover',
       'YouTube, TikTok, Instagram',
-      'Priority support',
-      'Analytics dashboard',
-      'Custom branding',
-      'API access'
     ]
   }
 ];
 
 export default function PaywallModal({ isOpen, onClose, title, message }: PaywallModalProps) {
   const { user } = useAuth();
+  const router = useRouter();
 
   if (!isOpen) return null;
+
+  const handleSelectPlan = () => {
+    onClose();
+    router.push('/dashboard/billing');
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -100,7 +99,7 @@ export default function PaywallModal({ isOpen, onClose, title, message }: Paywal
             {title || 'Upgrade to Continue'}
           </h2>
           <p className="text-gray-600 max-w-md mx-auto">
-            {message || "You've reached your free plan limit. Upgrade to generate unlimited videos."}
+            {message || "You need a paid plan to create series and generate videos. Choose a plan to get started!"}
           </p>
         </div>
 
@@ -150,10 +149,7 @@ export default function PaywallModal({ isOpen, onClose, title, message }: Paywal
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl'
                       : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                   }`}
-                  onClick={() => {
-                    // Redirect to checkout with plan
-                    window.location.href = `/checkout?plan=${plan.id}`;
-                  }}
+                  onClick={handleSelectPlan}
                 >
                   Get {plan.name}
                 </button>
@@ -162,16 +158,16 @@ export default function PaywallModal({ isOpen, onClose, title, message }: Paywal
           </div>
 
           {/* Current Plan Info */}
-          {user && !user.plan_limits?.can_generate && (
+          {user && user.plan !== 'free' && (
             <div className="mt-8 p-4 bg-gray-50 rounded-xl text-center">
               <p className="text-sm text-gray-600">
-                You've used <strong>{user.videos_generated_this_month}</strong> of <strong>{user.plan_limits?.videos_per_month}</strong> videos this month.
+                You&apos;ve used <strong>{user.videos_generated_this_month}</strong> of <strong>{user.plan_limits?.videos_per_month}</strong> videos this month.
                 Upgrade now to keep creating!
               </p>
             </div>
           )}
 
-          {/* Features */}
+          {/* Trust signals */}
           <div className="mt-8 pt-6 border-t border-gray-100">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>

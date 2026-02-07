@@ -10,7 +10,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional, Dict, List
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -317,9 +317,13 @@ async def upgrade_series_count(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Upgrade user's series count (called after successful payment).
-    This should be called from payment webhook or after Stripe checkout success.
+    Upgrade user's series count.
+    Note: Normally handled by Polar checkout/webhook flow.
+    This endpoint is kept for admin use only.
     """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
     if new_count < 1:
         raise HTTPException(status_code=400, detail="Series count must be at least 1")
     
@@ -1075,6 +1079,321 @@ async def process_video_generation_db(
     
     finally:
         db.close()
+
+
+# ═══════════════════════════════════════════════════════════
+# Polar.sh Payment Endpoints
+# ═══════════════════════════════════════════════════════════
+
+# Plan → Polar product ID mapping
+POLAR_PRODUCT_MAP = {
+    "launch": os.getenv("POLAR_PRODUCT_LAUNCH", ""),
+    "grow": os.getenv("POLAR_PRODUCT_GROW", ""),
+    "scale": os.getenv("POLAR_PRODUCT_SCALE", ""),
+}
+
+# Plan base prices (cents)
+PLAN_PRICES = {
+    "launch": 1900,
+    "grow": 3900,
+    "scale": 6900,
+}
+
+
+class CheckoutRequest(BaseModel):
+    """Request to create a Polar checkout session"""
+    plan: str  # launch, grow, scale
+    series_count: int = 1  # 1 = base, 2+ = extra series
+    billing_period: str = "monthly"  # monthly or yearly
+
+
+class CheckoutResponse(BaseModel):
+    """Checkout session response"""
+    checkout_url: str
+    checkout_id: str
+
+
+@app.post("/api/checkout/create", response_model=CheckoutResponse)
+async def create_checkout(
+    request: CheckoutRequest,
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Create a Polar checkout session for plan purchase.
+    Supports extra series (each extra series = 100% of base price).
+    """
+    from polar_sdk import Polar
+    from polar_sdk.models import CheckoutCreate
+    
+    # Validate plan
+    if request.plan not in POLAR_PRODUCT_MAP:
+        raise HTTPException(status_code=400, detail=f"Invalid plan: {request.plan}")
+    
+    product_id = POLAR_PRODUCT_MAP[request.plan]
+    if not product_id:
+        raise HTTPException(status_code=500, detail="Payment not configured for this plan")
+    
+    # Series count validation
+    series_count = max(1, request.series_count)
+    if request.plan == "launch" and series_count > 1:
+        raise HTTPException(status_code=400, detail="Launch plan only supports 1 series")
+    
+    access_token = os.getenv("POLAR_ACCESS_TOKEN", "")
+    if not access_token:
+        raise HTTPException(status_code=500, detail="Payment system not configured")
+    
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    
+    try:
+        polar = Polar(access_token=access_token)
+        
+        # Create checkout with product + metadata
+        checkout = polar.checkouts.create(request=CheckoutCreate(
+            product_id=product_id,
+            success_url=f"{frontend_url}/dashboard/billing/success?checkout_id={{CHECKOUT_ID}}",
+            customer_email=current_user.email,
+            metadata={
+                "user_id": str(current_user.id),
+                "plan": request.plan,
+                "series_count": str(series_count),
+                "billing_period": request.billing_period,
+            }
+        ))
+        
+        logger.info(f"Checkout created for {current_user.email}: plan={request.plan}, series={series_count}, checkout_id={checkout.id}")
+        
+        return CheckoutResponse(
+            checkout_url=checkout.url,
+            checkout_id=checkout.id
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to create checkout: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
+
+
+@app.get("/api/checkout/{checkout_id}/verify")
+async def verify_checkout(
+    checkout_id: str,
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Verify a checkout session status (called from success page).
+    If checkout is confirmed/succeeded, activate the user's plan.
+    """
+    from polar_sdk import Polar
+    
+    access_token = os.getenv("POLAR_ACCESS_TOKEN", "")
+    if not access_token:
+        raise HTTPException(status_code=500, detail="Payment system not configured")
+    
+    try:
+        polar = Polar(access_token=access_token)
+        checkout = polar.checkouts.get(id=checkout_id)
+        
+        logger.info(f"Checkout {checkout_id} status: {checkout.status}, metadata: {checkout.metadata}")
+        
+        # Check if this checkout belongs to the current user
+        metadata = checkout.metadata or {}
+        checkout_user_id = metadata.get("user_id", "")
+        
+        if checkout_user_id != str(current_user.id):
+            raise HTTPException(status_code=403, detail="This checkout doesn't belong to you")
+        
+        status = str(checkout.status).lower()
+        
+        if status in ("succeeded", "confirmed"):
+            # Activate the plan
+            plan = metadata.get("plan", "launch")
+            series_count = int(metadata.get("series_count", "1"))
+            
+            current_user.plan = plan
+            current_user.series_purchased = series_count
+            current_user.plan_started_at = datetime.utcnow()
+            
+            # Store Polar customer info if available
+            if checkout.customer_id:
+                current_user.polar_customer_id = str(checkout.customer_id)
+            if checkout.subscription_id:
+                current_user.polar_subscription_id = str(checkout.subscription_id)
+            
+            db.commit()
+            
+            logger.info(f"User {current_user.email} activated: plan={plan}, series={series_count}")
+            
+            return {
+                "status": "success",
+                "plan": plan,
+                "series_count": series_count,
+                "message": f"Welcome to the {plan.title()} plan!"
+            }
+        
+        return {
+            "status": status,
+            "message": "Payment is still being processed. Please wait a moment."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to verify checkout {checkout_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to verify checkout")
+
+
+@app.post("/api/webhooks/polar")
+async def polar_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Handle Polar webhook events.
+    Processes checkout.created, order.created, subscription events.
+    """
+    webhook_secret = os.getenv("POLAR_WEBHOOK_SECRET", "")
+    
+    try:
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        # Validate webhook signature if secret is configured
+        if webhook_secret and webhook_secret != "your-webhook-secret-here":
+            from polar_sdk.webhooks import validate_event, WebhookVerificationError
+            try:
+                event = validate_event(body, headers, webhook_secret)
+            except WebhookVerificationError:
+                logger.warning("Webhook signature verification failed")
+                raise HTTPException(status_code=403, detail="Invalid webhook signature")
+        else:
+            # Parse without verification (dev mode)
+            import json
+            event_data = json.loads(body)
+            # Create a simple namespace for event access
+            class SimpleEvent:
+                def __init__(self, data):
+                    self.TYPE = data.get("type", "")
+                    self.data = data.get("data", {})
+            event = SimpleEvent(event_data)
+        
+        event_type = str(event.TYPE) if hasattr(event, 'TYPE') else ""
+        logger.info(f"Polar webhook received: {event_type}")
+        
+        # Handle checkout completed
+        if event_type in ("checkout.created", "checkout.updated"):
+            data = event.data
+            
+            # Get metadata from the checkout
+            metadata = {}
+            if hasattr(data, 'metadata'):
+                metadata = data.metadata or {}
+            elif isinstance(data, dict):
+                metadata = data.get("metadata", {})
+            
+            # Get status
+            checkout_status = ""
+            if hasattr(data, 'status'):
+                checkout_status = str(data.status).lower()
+            elif isinstance(data, dict):
+                checkout_status = str(data.get("status", "")).lower()
+            
+            logger.info(f"Checkout webhook: status={checkout_status}, metadata={metadata}")
+            
+            if checkout_status in ("succeeded", "confirmed"):
+                user_id = metadata.get("user_id", "")
+                plan = metadata.get("plan", "")
+                series_count = int(metadata.get("series_count", "1"))
+                
+                if user_id and plan:
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if user:
+                        user.plan = plan
+                        user.series_purchased = series_count
+                        user.plan_started_at = datetime.utcnow()
+                        
+                        # Store customer/subscription IDs
+                        customer_id = None
+                        subscription_id = None
+                        if hasattr(data, 'customer_id'):
+                            customer_id = data.customer_id
+                        elif isinstance(data, dict):
+                            customer_id = data.get("customer_id")
+                        if hasattr(data, 'subscription_id'):
+                            subscription_id = data.subscription_id
+                        elif isinstance(data, dict):
+                            subscription_id = data.get("subscription_id")
+                        
+                        if customer_id:
+                            user.polar_customer_id = str(customer_id)
+                        if subscription_id:
+                            user.polar_subscription_id = str(subscription_id)
+                        
+                        db.commit()
+                        logger.info(f"Webhook: Activated {user.email} → plan={plan}, series={series_count}")
+        
+        # Handle order created (backup for checkout)
+        elif event_type == "order.created":
+            data = event.data
+            metadata = {}
+            if hasattr(data, 'metadata'):
+                metadata = data.metadata or {}
+            elif isinstance(data, dict):
+                metadata = data.get("metadata", {})
+            
+            user_id = metadata.get("user_id", "")
+            plan = metadata.get("plan", "")
+            series_count = int(metadata.get("series_count", "1"))
+            
+            if user_id and plan:
+                user = db.query(User).filter(User.id == user_id).first()
+                if user:
+                    user.plan = plan
+                    user.series_purchased = series_count
+                    user.plan_started_at = datetime.utcnow()
+                    db.commit()
+                    logger.info(f"Order webhook: Activated {user.email} → plan={plan}, series={series_count}")
+        
+        # Handle subscription canceled
+        elif event_type in ("subscription.canceled", "subscription.revoked"):
+            data = event.data
+            
+            # Find user by subscription ID
+            subscription_id = None
+            if hasattr(data, 'id'):
+                subscription_id = str(data.id)
+            elif isinstance(data, dict):
+                subscription_id = str(data.get("id", ""))
+            
+            if subscription_id:
+                user = db.query(User).filter(User.polar_subscription_id == subscription_id).first()
+                if user:
+                    user.plan = "free"
+                    user.series_purchased = 0
+                    db.commit()
+                    logger.info(f"Subscription canceled: {user.email} → free plan")
+        
+        return {"received": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Webhook processing error: {e}", exc_info=True)
+        # Return 200 to prevent Polar from retrying
+        return {"received": True, "error": str(e)}
+
+
+@app.get("/api/user/plan")
+async def get_user_plan(
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get current user's plan details."""
+    return {
+        "plan": current_user.plan,
+        "series_purchased": current_user.series_purchased,
+        "plan_limits": current_user.plan_limits,
+        "videos_remaining": current_user.videos_remaining,
+        "videos_generated_this_month": current_user.videos_generated_this_month,
+        "plan_started_at": str(current_user.plan_started_at) if current_user.plan_started_at else None,
+        "is_free": current_user.plan == "free",
+    }
 
 
 # ═══════════════════════════════════════════════════════════

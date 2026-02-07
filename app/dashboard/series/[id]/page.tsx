@@ -6,6 +6,8 @@ import Link from 'next/link'
 import Sidebar from '@/components/Sidebar'
 import Breadcrumb from '@/components/Breadcrumb'
 import MobileMenuButton from '@/components/MobileMenuButton'
+import PaywallModal from '@/components/PaywallModal'
+import { useAuth } from '@/context/AuthContext'
 import { Calendar, Play, Clock, Check, Loader2, Plus, Youtube, Instagram, Sparkles, AlertCircle } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -42,10 +44,12 @@ const TikTokIcon = ({ className }: { className?: string }) => (
 export default function SeriesDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'videos' | 'calendar'>('videos')
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [showPaywall, setShowPaywall] = useState(false)
   const [seriesName, setSeriesName] = useState('')
   const [seriesStatus, setSeriesStatus] = useState('active')
   const [videos, setVideos] = useState<Video[]>([])
@@ -169,6 +173,12 @@ export default function SeriesDetailPage() {
   }
 
   const handleGenerateVideo = async () => {
+    // Check if user is on free plan
+    if (user && user.plan === 'free') {
+      setShowPaywall(true)
+      return
+    }
+    
     const token = getToken()
     if (!token) return
     setGenerating(true)
@@ -179,6 +189,9 @@ export default function SeriesDetailPage() {
       })
       if (response.ok) {
         await fetchSeriesData()
+      } else if (response.status === 403) {
+        // Plan limit reached or free plan
+        setShowPaywall(true)
       } else {
         const err = await response.json()
         alert(err.detail || 'Failed to start generation')
@@ -413,6 +426,16 @@ export default function SeriesDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        title="Upgrade to Generate Videos"
+        message={user?.plan === 'free' 
+          ? "You need a paid plan to generate videos. Choose a plan to get started!"
+          : "You've reached your monthly video limit. Upgrade your plan for more videos!"}
+      />
     </div>
   )
 }

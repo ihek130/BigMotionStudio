@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useWizard } from '@/context/WizardContext'
+import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
+import PaywallModal from '@/components/PaywallModal'
 
 const niches = [
   {
@@ -94,10 +96,23 @@ const niches = [
 
 export default function NicheSelectionPage() {
   const [selectedNiche, setSelectedNiche] = useState<string>('')
+  const [showPaywall, setShowPaywall] = useState(false)
   const { updateData } = useWizard()
+  const { user } = useAuth()
   const router = useRouter()
 
+  // Show paywall if user is on free plan
+  useEffect(() => {
+    if (user && user.plan === 'free') {
+      setShowPaywall(true)
+    }
+  }, [user])
+
   const handleContinue = () => {
+    if (user && user.plan === 'free') {
+      setShowPaywall(true)
+      return
+    }
     if (selectedNiche) {
       updateData({ niche: selectedNiche })
       router.push('/create/style')
@@ -170,6 +185,14 @@ export default function NicheSelectionPage() {
           <ArrowRight className={`w-4 h-4 ${selectedNiche ? 'group-hover:translate-x-1' : ''} transition-transform`} />
         </button>
       </div>
+
+      {/* Paywall Modal for free users */}
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        title="Subscribe to Create Series"
+        message="You need a paid plan to create video series. Choose a plan to start generating content!"
+      />
     </div>
   )
 }

@@ -42,13 +42,13 @@ class User(Base):
     github_id = Column(String(255), unique=True, nullable=True)
     
     # Subscription & Billing
-    plan = Column(String(50), default="launch")  # admin, launch, grow, scale
+    plan = Column(String(50), default="free")  # free, launch, grow, scale
     is_admin = Column(Boolean, default=False)  # Admin has unlimited access
-    series_purchased = Column(Integer, default=1)  # Number of series user paid for (base is 1)
+    series_purchased = Column(Integer, default=0)  # Number of series user paid for
     plan_started_at = Column(DateTime, nullable=True)
     plan_expires_at = Column(DateTime, nullable=True)
-    stripe_customer_id = Column(String(255), nullable=True)
-    stripe_subscription_id = Column(String(255), nullable=True)
+    polar_customer_id = Column(String(255), nullable=True)
+    polar_subscription_id = Column(String(255), nullable=True)
     
     # Usage tracking
     videos_generated_total = Column(Integer, default=0)
@@ -81,26 +81,32 @@ class User(Base):
             }
         
         limits = {
+            "free": {
+                "videos_total": 0,
+                "videos_per_month": 0,
+                "series_limit": 0,
+                "platforms": [],
+            },
             "launch": {
                 "videos_total": 999999,
-                "videos_per_month": 12 * self.series_purchased,  # 12 per series (3x/week each)
-                "series_limit": self.series_purchased,
+                "videos_per_month": 12 * max(1, self.series_purchased),  # 12 per series (3x/week each)
+                "series_limit": max(1, self.series_purchased),
                 "platforms": ["youtube", "tiktok", "instagram"],
             },
             "grow": {
                 "videos_total": 999999,
-                "videos_per_month": 30 * self.series_purchased,  # 30 per series (daily each)
-                "series_limit": self.series_purchased,
+                "videos_per_month": 30 * max(1, self.series_purchased),  # 30 per series (daily each)
+                "series_limit": max(1, self.series_purchased),
                 "platforms": ["youtube", "tiktok", "instagram"],
             },
             "scale": {
                 "videos_total": 999999,
-                "videos_per_month": 60 * self.series_purchased,  # 60 per series (2x/day each)
-                "series_limit": self.series_purchased,
+                "videos_per_month": 60 * max(1, self.series_purchased),  # 60 per series (2x/day each)
+                "series_limit": max(1, self.series_purchased),
                 "platforms": ["youtube", "tiktok", "instagram"],
             }
         }
-        return limits.get(self.plan, limits["launch"])
+        return limits.get(self.plan, limits["free"])
     
     @property
     def can_generate_video(self):

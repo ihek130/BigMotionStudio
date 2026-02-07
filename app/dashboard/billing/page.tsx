@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useAuth } from '@/context/AuthContext'
 import Sidebar from '@/components/Sidebar'
 import Breadcrumb from '@/components/Breadcrumb'
 import MobileMenuButton from '@/components/MobileMenuButton'
-import { Check, Zap, Rocket, Crown, Clock, Video, Headphones, TrendingUp, Plus, Minus } from 'lucide-react'
+import { Check, Zap, Rocket, Crown, Clock, Video, Headphones, TrendingUp, Plus, Minus, Loader2 } from 'lucide-react'
 
 interface Plan {
   id: string
@@ -24,9 +25,12 @@ interface Plan {
 }
 
 export default function BillingPage() {
+  const { user } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly')
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState<string | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   
   // Series count state for each plan that supports it
   const [seriesCount, setSeriesCount] = useState<Record<string, number>>({
@@ -35,10 +39,10 @@ export default function BillingPage() {
     scale: 1
   })
 
-  // Mock current plan - replace with actual user data
-  const currentPlan = 'free'
-  const currentCredits = 2
-  const maxCredits = 3
+  // Real user plan from auth context
+  const currentPlan = user?.plan || 'free'
+  const currentCredits = user?.videos_generated_this_month || 0
+  const maxCredits = user?.plan_limits?.videos_per_month || 0
 
   const plans: Plan[] = [
     {
@@ -133,10 +137,41 @@ export default function BillingPage() {
     })
   }
 
-  const handleUpgrade = (planId: string) => {
+  const handleUpgrade = async (planId: string) => {
     setSelectedPlan(planId)
-    // In production, redirect to Stripe checkout
-    console.log(`Upgrading to ${planId}`)
+    setIsCheckoutLoading(planId)
+    setCheckoutError(null)
+    
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const token = localStorage.getItem('reelflow_access_token')
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/checkout/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          plan: planId,
+          series_count: seriesCount[planId] || 1,
+          billing_period: billingPeriod,
+        }),
+      })
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Checkout failed' }))
+        throw new Error(error.detail || 'Failed to create checkout')
+      }
+      
+      const data = await response.json()
+      
+      // Redirect to Polar checkout
+      window.location.href = data.checkout_url
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Failed to start checkout')
+      setIsCheckoutLoading(null)
+    }
   }
 
   const breadcrumbItems = [
@@ -260,6 +295,13 @@ export default function BillingPage() {
           </div>
 
           {/* Pricing Cards */}
+          {checkoutError && (
+            <div className="max-w-4xl mx-auto mb-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 text-center">
+                {checkoutError}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto pt-4">
             {plans.map((plan) => {
               const colors = planColorClasses[plan.color as keyof typeof planColorClasses]
@@ -367,16 +409,23 @@ export default function BillingPage() {
 
                     <button
                       onClick={() => handleUpgrade(plan.id)}
-                      disabled={isCurrentPlan}
+                      disabled={isCurrentPlan || isCheckoutLoading === plan.id}
                       className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                         isCurrentPlan
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : plan.highlighted
-                            ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                          : isCheckoutLoading === plan.id
+                            ? 'bg-gray-200 text-gray-500 cursor-wait'
+                            : plan.highlighted
+                              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
                       }`}
                     >
-                      {isCurrentPlan ? 'Current Plan' : `Choose ${plan.name}`}
+                      {isCurrentPlan ? 'Current Plan' : isCheckoutLoading === plan.id ? (
+                        <span className="flex items-center justify-center space-x-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Redirecting...</span>
+                        </span>
+                      ) : `Choose ${plan.name}`}
                     </button>
                   </div>
                 </div>

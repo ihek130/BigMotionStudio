@@ -5,6 +5,7 @@ import { useWizard } from '@/context/WizardContext'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Check, Instagram, Youtube, Loader2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import PaywallModal from '@/components/PaywallModal'
 
 interface PlatformConnection {
   id: string
@@ -49,6 +50,7 @@ export default function PlatformsPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
   const [loading, setLoading] = useState<string>('')
   const [initialLoading, setInitialLoading] = useState(true)
+  const [showPaywall, setShowPaywall] = useState(false)
   const { updateData, data } = useWizard()
   const { user } = useAuth()
   const router = useRouter()
@@ -244,6 +246,12 @@ export default function PlatformsPage() {
       
       if (!response.ok) {
         const error = await response.json()
+        // Show paywall if upgrade required (free plan or limit reached)
+        if (response.status === 403) {
+          setShowPaywall(true)
+          setLoading('')
+          return
+        }
         throw new Error(error.detail || 'Failed to create series')
       }
       
@@ -453,6 +461,14 @@ export default function PlatformsPage() {
           <span>Create Series</span>
         </button>
       </div>
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        title="Upgrade Required"
+        message="You need a paid plan to create video series. Choose a plan to get started!"
+      />
     </div>
   )
 }
