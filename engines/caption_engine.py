@@ -49,11 +49,11 @@ ASS_STYLE_CONFIG = {
         "outline_color": "&H00FFFF00",   # Cyan outline for glow
         "back_color": "&H00000000",      # Transparent
         "bold": -1,
-        "outline": 5,
+        "outline": 2,
         "shadow": 0,
         "alignment": 5,  # Center
         "margin_v": 40,
-        "blur": 3,  # Subtle glow (FFmpeg libass compatible)
+        "blur": 1,  # Very subtle glow (FFmpeg libass compatible)
         "animation": "glow",
     },
     "minimal-clean": {
@@ -463,10 +463,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return f"Dialogue: 0,{start_time},{end_time},{style_name},,0,0,0,,{karaoke_text.strip()}"
     
     def _add_glow_effect(self, text: str, style_config: Dict) -> str:
-        """Add neon glow effect — layered: blurred glow behind + sharp text on top"""
+        """Add subtle neon glow effect — thin soft outline for readability"""
         primary = style_config.get('primary_color', '&H00FFFF00')
-        # Outer glow layer (slightly blurred, thicker outline) + sharp inner text
-        return f"{{\\blur3\\bord6\\3c{primary}\\fad(100,100)}}{text}"
+        # Thin glow border + minimal blur so text stays crisp and readable
+        return f"{{\\blur1\\bord3\\3c{primary}\\fad(100,100)}}{text}"
     
     def _add_bounce_effect(self, text: str) -> str:
         """Add bounce/pop entrance effect"""
