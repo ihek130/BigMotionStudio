@@ -28,9 +28,9 @@ interface VideoData {
     ai_disclosure: boolean
   }
   publishing: {
-    youtube?: { status: 'published' | 'scheduled' | 'failed', scheduled_at?: string }
-    tiktok?: { status: 'published' | 'scheduled' | 'failed', scheduled_at?: string }
-    instagram?: { status: 'published' | 'scheduled' | 'failed', scheduled_at?: string }
+    youtube?: { status: 'published' | 'scheduled' | 'failed' | 'pending', scheduled_at?: string }
+    tiktok?: { status: 'published' | 'scheduled' | 'failed' | 'pending', scheduled_at?: string }
+    instagram?: { status: 'published' | 'scheduled' | 'failed' | 'pending', scheduled_at?: string }
   }
   scheduled_at?: string
 }
