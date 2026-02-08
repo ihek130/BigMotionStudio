@@ -83,12 +83,13 @@ export default function VideoDetailPage() {
         }
       })
       
-      // Also fetch series info for breadcrumb
+      // Also fetch series info for breadcrumb and platform config
+      let seriesData: any = null
       const seriesRes = await fetch(`${API_URL}/api/series/${params.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (seriesRes.ok) {
-        const seriesData = await seriesRes.json()
+        seriesData = await seriesRes.json()
         setSeriesName(seriesData.name || seriesData.title || 'Series')
       }
 
@@ -114,9 +115,15 @@ export default function VideoDetailPage() {
             ai_disclosure: true
           },
           publishing: {
-            ...(data.youtubeUrl ? { youtube: { status: 'published', scheduled_at: data.youtubePublishedAt } } : {}),
-            ...(data.tiktokUrl ? { tiktok: { status: 'published', scheduled_at: data.tiktokPublishedAt } } : {}),
-            ...(data.instagramUrl ? { instagram: { status: 'published', scheduled_at: data.instagramPublishedAt } } : {})
+            ...(seriesData?.platforms?.includes('youtube') || data.youtubeUrl
+              ? { youtube: { status: data.youtubeUrl ? 'published' : (data.scheduledFor ? 'scheduled' : 'pending'), scheduled_at: data.youtubePublishedAt } }
+              : {}),
+            ...(seriesData?.platforms?.includes('tiktok') || data.tiktokUrl
+              ? { tiktok: { status: data.tiktokUrl ? 'published' : (data.scheduledFor ? 'scheduled' : 'pending'), scheduled_at: data.tiktokPublishedAt } }
+              : {}),
+            ...(seriesData?.platforms?.includes('instagram') || data.instagramUrl
+              ? { instagram: { status: data.instagramUrl ? 'published' : (data.scheduledFor ? 'scheduled' : 'pending'), scheduled_at: data.instagramPublishedAt } }
+              : {})
           },
           scheduled_at: data.scheduledFor
         }
@@ -242,19 +249,20 @@ export default function VideoDetailPage() {
   }
 
   const getStatusBadge = (status: string) => {
-    const styles = {
+    const styles: Record<string, { bg: string, text: string, icon: typeof Check }> = {
       published: { bg: 'bg-green-100', text: 'text-green-700', icon: Check },
       scheduled: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Clock },
+      pending: { bg: 'bg-gray-100', text: 'text-gray-500', icon: Clock },
       failed: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertCircle }
     }
     
-    const style = styles[status as keyof typeof styles]
+    const style = styles[status] || styles.pending
     const Icon = style.icon
     
     return (
       <span className={`inline-flex items-center space-x-1 px-2 py-1 text-xs font-semibold rounded-full ${style.bg} ${style.text}`}>
         <Icon className="w-3 h-3" />
-        <span>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
+        <span>{status === 'pending' ? 'Not Published' : status.charAt(0).toUpperCase() + status.slice(1)}</span>
       </span>
     )
   }
@@ -352,12 +360,18 @@ export default function VideoDetailPage() {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Publishing Status</h3>
                 <div className="space-y-2">
-                  {Object.entries(video.publishing).map(([platform, data]) => (
-                    <div key={platform} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-sm font-medium text-gray-700 capitalize">{platform}</span>
-                      {getStatusBadge(data.status)}
-                    </div>
-                  ))}
+                  {Object.keys(video.publishing).length > 0 ? (
+                    Object.entries(video.publishing).map(([platform, data]) => (
+                      <div key={platform} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-700 capitalize">{platform === 'youtube' ? 'YouTube' : platform === 'tiktok' ? 'TikTok' : 'Instagram'}</span>
+                        </div>
+                        {getStatusBadge(data.status)}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-2">No platforms configured</p>
+                  )}
                 </div>
               </div>
             </div>
