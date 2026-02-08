@@ -26,6 +26,30 @@ class TikTokUploadEngine:
         if not self.client_key or not self.client_secret:
             logger.warning("TikTok credentials not configured. Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET when ready.")
     
+    async def _query_creator_info(self, client: httpx.AsyncClient, access_token: str) -> Dict:
+        """
+        Query TikTok creator info to get valid privacy levels and settings.
+        Required by TikTok before posting (content sharing guidelines compliance).
+        """
+        logger.info("Querying TikTok creator info...")
+        response = await client.post(
+            f"{self.api_url}/v2/post/publish/creator_info/query/",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json; charset=UTF-8"
+            }
+        )
+        data = response.json()
+        if data.get("error", {}).get("code", "ok") != "ok":
+            error_msg = data["error"].get("message", "Unknown error")
+            raise Exception(f"Creator info query failed: {error_msg}")
+        
+        creator_data = data.get("data", {})
+        logger.info(f"Creator info: username={creator_data.get('creator_username')}, "
+                     f"privacy_options={creator_data.get('privacy_level_options')}, "
+                     f"max_duration={creator_data.get('max_video_post_duration_sec')}s")
+        return creator_data
+    
     async def upload_video(
         self,
         platform_connection,
@@ -41,9 +65,10 @@ class TikTokUploadEngine:
         Upload video to TikTok.
         
         TikTok Upload Process:
+        0. Query creator info (required by content sharing guidelines)
         1. Initialize upload and get upload URL
         2. Upload video file to provided URL
-        3. Publish video
+        3. Check publish status
         
         Args:
             platform_connection: PlatformConnection with TikTok tokens
@@ -87,24 +112,52 @@ class TikTokUploadEngine:
             file_size = os.path.getsize(video_path)
             
             async with httpx.AsyncClient(timeout=300.0) as client:
+                # Step 0: Query creator info (required by TikTok content sharing guidelines)
+                creator_info = await self._query_creator_info(client, access_token)
+                
+                # Validate privacy level against creator's allowed options
+                allowed_privacy = creator_info.get("privacy_level_options", ["SELF_ONLY"])
+                if privacy_level not in allowed_privacy:
+                    old_level = privacy_level
+                    # Fall back: prefer SELF_ONLY, then first available option
+                    privacy_level = "SELF_ONLY" if "SELF_ONLY" in allowed_privacy else allowed_privacy[0]
+                    logger.warning(f"Privacy level '{old_level}' not available, using '{privacy_level}' "
+                                   f"(allowed: {allowed_privacy})")
+                
+                # Respect creator's interaction settings
+                if creator_info.get("duet_disabled"):
+                    disable_duet = True
+                if creator_info.get("stitch_disabled"):
+                    disable_stitch = True
+                if creator_info.get("comment_disabled"):
+                    disable_comment = True
+                
                 # Step 1: Initialize upload
                 logger.info("Step 1: Initializing TikTok upload...")
+                
+                # Build post_info with required fields per TikTok Content Posting API
+                post_info = {
+                    "title": title[:2200],  # TikTok max caption length in UTF-16 runes
+                    "privacy_level": privacy_level,
+                    "disable_duet": disable_duet,
+                    "disable_stitch": disable_stitch,
+                    "disable_comment": disable_comment,
+                    "video_cover_timestamp_ms": 1000,
+                    # Required: brand content disclosure fields
+                    "brand_content_toggle": False,
+                    "brand_organic_toggle": False,
+                    # Mark as AI-generated content (required for compliance)
+                    "is_aigc": True,
+                }
                 
                 init_response = await client.post(
                     f"{self.api_url}/v2/post/publish/video/init/",
                     headers={
                         "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json; charset=UTF-8"
                     },
                     json={
-                        "post_info": {
-                            "title": title[:150],  # TikTok limit
-                            "privacy_level": privacy_level,
-                            "disable_duet": disable_duet,
-                            "disable_stitch": disable_stitch,
-                            "disable_comment": disable_comment,
-                            "video_cover_timestamp_ms": 1000  # Use frame at 1 second as cover
-                        },
+                        "post_info": post_info,
                         "source_info": {
                             "source": "FILE_UPLOAD",
                             "video_size": file_size,
@@ -116,16 +169,19 @@ class TikTokUploadEngine:
                 
                 init_data = init_response.json()
                 
-                if init_data.get("error"):
-                    error_msg = init_data["error"].get("message", "Unknown error")
-                    raise Exception(f"TikTok init failed: {error_msg}")
+                # Check for error (TikTok returns error.code != "ok" on failure)
+                error_info = init_data.get("error", {})
+                if error_info.get("code", "ok") != "ok":
+                    error_msg = error_info.get("message", "Unknown error")
+                    error_code = error_info.get("code", "unknown")
+                    raise Exception(f"TikTok init failed ({error_code}): {error_msg}")
                 
                 publish_id = init_data["data"]["publish_id"]
                 upload_url = init_data["data"]["upload_url"]
                 
                 logger.info(f"Upload initialized: {publish_id}")
                 
-                # Step 2: Upload video file (stream from disk to avoid loading entire file in memory)
+                # Step 2: Upload video file with required Content-Range header
                 logger.info("Step 2: Uploading video file...")
                 
                 with open(video_path, 'rb') as video_file:
@@ -133,12 +189,13 @@ class TikTokUploadEngine:
                         upload_url,
                         headers={
                             "Content-Type": "video/mp4",
-                            "Content-Length": str(file_size)
+                            "Content-Length": str(file_size),
+                            "Content-Range": f"bytes 0-{file_size - 1}/{file_size}"
                         },
                         content=video_file
                     )
                 
-                if upload_response.status_code != 200:
+                if upload_response.status_code not in (200, 201):
                     raise Exception(f"File upload failed with status {upload_response.status_code}")
                 
                 logger.info("File uploaded successfully")
@@ -159,8 +216,9 @@ class TikTokUploadEngine:
                 
                 status_data = status_response.json()
                 
-                if status_data.get("error"):
-                    error_msg = status_data["error"].get("message", "Unknown error")
+                status_error = status_data.get("error", {})
+                if status_error.get("code", "ok") != "ok":
+                    error_msg = status_error.get("message", "Unknown error")
                     raise Exception(f"TikTok status check failed: {error_msg}")
                 
                 publish_status = status_data["data"]["status"]
