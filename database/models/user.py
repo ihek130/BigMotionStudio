@@ -10,6 +10,12 @@ from sqlalchemy.orm import relationship
 from ..connection import Base
 
 
+def _start_of_current_month() -> datetime:
+    """Return midnight of the 1st of the current month (UTC)."""
+    now = datetime.utcnow()
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
 class User(Base):
     """
     User account model.
@@ -68,6 +74,39 @@ class User(Base):
     def __repr__(self):
         return f"<User {self.email}>"
     
+    def check_monthly_reset(self):
+        """
+        Reset videos_generated_this_month if we've entered a new billing month.
+        Call this on every authenticated request (in the dependency) so the
+        counter stays accurate without needing cron jobs.
+        Returns True if a reset was performed.
+        """
+        now = datetime.utcnow()
+        month_start = _start_of_current_month()
+        
+        needs_reset = False
+        if self.usage_reset_at is None:
+            # First time — initialise to start of current month
+            needs_reset = True
+        elif self.usage_reset_at < month_start:
+            # Old month — time to reset
+            needs_reset = True
+        
+        if needs_reset:
+            self.videos_generated_this_month = 0
+            self.usage_reset_at = month_start
+            return True
+        return False
+    
+    @property
+    def is_plan_expired(self):
+        """Check if user's plan has expired (canceled subscription grace period ended)."""
+        if self.plan == "free":
+            return False
+        if self.plan_expires_at and self.plan_expires_at < datetime.utcnow():
+            return True
+        return False
+    
     @property
     def plan_limits(self):
         """Get limits based on user's plan"""
@@ -79,6 +118,11 @@ class User(Base):
                 "series_limit": 999,
                 "platforms": ["youtube", "tiktok", "instagram"],
             }
+        
+        # If plan expired after cancellation, treat as free
+        effective_plan = self.plan
+        if self.is_plan_expired:
+            effective_plan = "free"
         
         limits = {
             "free": {
@@ -106,7 +150,7 @@ class User(Base):
                 "platforms": ["youtube", "tiktok", "instagram"],
             }
         }
-        return limits.get(self.plan, limits["free"])
+        return limits.get(effective_plan, limits["free"])
     
     @property
     def can_generate_video(self):

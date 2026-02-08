@@ -53,7 +53,12 @@ class VideoScheduler:
     GENERATION_LEAD_TIME = timedelta(hours=1.5)  # Generate 1.5 hours before upload (optimized for server efficiency)
     
     def __init__(self):
-        self.db = next(get_db())
+        # Use a fresh session per scheduling cycle instead of one long-lived session
+        pass
+    
+    def _get_db(self):
+        """Get a fresh database session for each operation."""
+        return next(get_db())
         
     def get_plan_posting_frequency(self, plan: str) -> Dict:
         """Get posting frequency for each plan"""
@@ -113,86 +118,76 @@ class VideoScheduler:
         tz_name = getattr(series, 'timezone', None) or "UTC"
         frequency = self.get_plan_posting_frequency(user.plan)
         
+        # Helper: given a naive local date+time → naive UTC
+        def next_local_slot(base_date_utc: datetime, time_str: str) -> datetime:
+            """Build a local datetime from a UTC base date + local time string, then convert to UTC."""
+            hour, minute = map(int, time_str.split(':'))
+            # Convert base_date from UTC to local so we get the correct local date
+            try:
+                local_tz = ZoneInfo(tz_name)
+                base_local = base_date_utc.replace(tzinfo=timezone.utc).astimezone(local_tz).replace(tzinfo=None)
+            except Exception:
+                base_local = base_date_utc
+            local_dt = base_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            return self._local_to_utc(local_dt, tz_name)
+        
         # Launch plan: 3x per week (e.g., Mon/Wed/Fri at first posting_time)
         if user.plan == "launch":
-            # Use first posting time (in user's local timezone)
-            hour, minute = map(int, posting_times[0].split(':'))
+            time_str = posting_times[0]
             
-            # Build the local time, then convert to UTC
             if not last_video_time:
-                next_local = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                next_time = self._local_to_utc(next_local, tz_name)
+                next_time = next_local_slot(now, time_str)
                 if next_time <= now:
-                    next_local += timedelta(days=1)
-                    next_time = self._local_to_utc(next_local, tz_name)
+                    next_time = next_local_slot(now + timedelta(days=1), time_str)
                 return next_time
             
             # Schedule ~2-3 days after last video
-            next_local = last_video_time + timedelta(days=frequency["days_between"])
-            next_local = next_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            next_time = self._local_to_utc(next_local, tz_name)
+            candidate = last_video_time + timedelta(days=frequency["days_between"])
+            next_time = next_local_slot(candidate, time_str)
             
-            # Ensure it's in the future
             while next_time <= now:
-                next_local += timedelta(days=frequency["days_between"])
-                next_time = self._local_to_utc(next_local, tz_name)
+                candidate += timedelta(days=frequency["days_between"])
+                next_time = next_local_slot(candidate, time_str)
             
             return next_time
         
         # Grow plan: Daily at first posting_time
         elif user.plan == "grow":
-            hour, minute = map(int, posting_times[0].split(':'))
+            time_str = posting_times[0]
             
             if not last_video_time:
-                next_local = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                next_time = self._local_to_utc(next_local, tz_name)
+                next_time = next_local_slot(now, time_str)
                 if next_time <= now:
-                    next_local += timedelta(days=1)
-                    next_time = self._local_to_utc(next_local, tz_name)
+                    next_time = next_local_slot(now + timedelta(days=1), time_str)
                 return next_time
             
-            # Next day at same time
-            next_local = last_video_time + timedelta(days=1)
-            next_local = next_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            next_time = self._local_to_utc(next_local, tz_name)
+            candidate = last_video_time + timedelta(days=1)
+            next_time = next_local_slot(candidate, time_str)
             
             while next_time <= now:
-                next_local += timedelta(days=1)
-                next_time = self._local_to_utc(next_local, tz_name)
+                candidate += timedelta(days=1)
+                next_time = next_local_slot(candidate, time_str)
             
             return next_time
         
         # Scale plan: 2x daily at posting_times[0] and posting_times[1]
         elif user.plan == "scale":
-            # Should have 2 posting times
             time_slots = posting_times if len(posting_times) >= 2 else [posting_times[0], "21:00"]
             
             if not last_video_time:
-                # Schedule for next available slot
                 for time_str in time_slots:
-                    hour, minute = map(int, time_str.split(':'))
-                    next_local = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                    next_time = self._local_to_utc(next_local, tz_name)
+                    next_time = next_local_slot(now, time_str)
                     if next_time > now:
                         return next_time
-                # All slots today passed, use first slot tomorrow
-                hour, minute = map(int, time_slots[0].split(':'))
-                next_local = (now + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
-                return self._local_to_utc(next_local, tz_name)
+                return next_local_slot(now + timedelta(days=1), time_slots[0])
             
             # Find next slot after last video
             for time_str in time_slots:
-                hour, minute = map(int, time_str.split(':'))
-                next_local = last_video_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                next_time = self._local_to_utc(next_local, tz_name)
-                
+                next_time = next_local_slot(last_video_time, time_str)
                 if next_time > last_video_time and next_time > now:
                     return next_time
             
-            # No more slots today, use first slot tomorrow
-            hour, minute = map(int, time_slots[0].split(':'))
-            next_local = (last_video_time + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
-            return self._local_to_utc(next_local, tz_name)
+            return next_local_slot(last_video_time + timedelta(days=1), time_slots[0])
         
         # Default: daily
         return now + timedelta(days=1)
@@ -209,60 +204,78 @@ class VideoScheduler:
     def get_videos_to_generate(self) -> List[Dict]:
         """Find videos that need to be generated now"""
         videos_to_generate = []
+        db = self._get_db()
         
-        # Get all active series
-        series_list = self.db.query(Series).filter(
-            Series.status == "active"
-        ).all()
-        
-        logger.info(f"Checking {len(series_list)} active series for scheduling")
-        
-        for series in series_list:
-            # Get series owner
-            user = self.db.query(User).filter(User.id == series.user_id).first()
-            if not user:
-                logger.warning(f"Series '{series.name}' has no owner, skipping")
-                continue
+        try:
+            # Get all active series
+            series_list = db.query(Series).filter(
+                Series.status == "active"
+            ).all()
             
-            # Check if user can generate more videos this month
-            # Note: videos_per_month already multiplied by series_purchased in User model
-            if not user.can_generate_video:
-                logger.info(f"User {user.email} has reached monthly limit ({user.videos_generated_this_month}/{user.plan_limits['videos_per_month']}), skipping all series")
-                continue
+            logger.info(f"Checking {len(series_list)} active series for scheduling")
             
-            # Get last scheduled video for this series
-            last_video = self.db.query(Video).filter(
-                Video.series_id == series.id,
-                Video.scheduled_for.isnot(None)
-            ).order_by(Video.scheduled_for.desc()).first()
-            
-            last_video_time = last_video.scheduled_for if last_video else None
-            tz_name = getattr(series, 'timezone', None) or 'UTC'
-            logger.info(f"Series '{series.name}': plan={user.plan}, posting_times={series.posting_times}, timezone={tz_name}, last_video_at={last_video_time}")
-            
-            # Calculate next scheduled upload time
-            next_upload_time = self.calculate_next_scheduled_time(
-                series,
-                user,
-                last_video_time
-            )
-            
-            generation_time = next_upload_time - self.GENERATION_LEAD_TIME
-            now = datetime.utcnow()
-            logger.info(f"Series '{series.name}': next_upload={next_upload_time}, generation_window={generation_time} to {next_upload_time}, now={now}")
-            
-            # Check if we should generate now
-            if self.should_generate_now(next_upload_time):
-                logger.info(f"Series '{series.name}' ready for generation (upload at {next_upload_time})")
+            for series in series_list:
+                # Get series owner
+                user = db.query(User).filter(User.id == series.user_id).first()
+                if not user:
+                    logger.warning(f"Series '{series.name}' has no owner, skipping")
+                    continue
                 
-                videos_to_generate.append({
-                    "series": series,
-                    "user": user,
-                    "scheduled_upload_time": next_upload_time
-                })
-            else:
-                time_until_gen = generation_time - now
-                logger.info(f"Series '{series.name}': NOT in generation window. Generation starts in {time_until_gen}")
+                # Auto-reset monthly usage if needed
+                if user.check_monthly_reset():
+                    db.commit()
+                
+                # Check if user can generate more videos this month
+                if not user.can_generate_video:
+                    logger.info(f"User {user.email} has reached monthly limit ({user.videos_generated_this_month}/{user.plan_limits['videos_per_month']}), skipping all series")
+                    continue
+                
+                # Get last scheduled video for this series
+                last_video = db.query(Video).filter(
+                    Video.series_id == series.id,
+                    Video.scheduled_for.isnot(None)
+                ).order_by(Video.scheduled_for.desc()).first()
+                
+                last_video_time = last_video.scheduled_for if last_video else None
+                tz_name = getattr(series, 'timezone', None) or 'UTC'
+                logger.info(f"Series '{series.name}': plan={user.plan}, posting_times={series.posting_times}, timezone={tz_name}, last_video_at={last_video_time}")
+                
+                # Calculate next scheduled upload time
+                next_upload_time = self.calculate_next_scheduled_time(
+                    series,
+                    user,
+                    last_video_time
+                )
+                
+                generation_time = next_upload_time - self.GENERATION_LEAD_TIME
+                now = datetime.utcnow()
+                logger.info(f"Series '{series.name}': next_upload={next_upload_time}, generation_window={generation_time} to {next_upload_time}, now={now}")
+                
+                # Duplicate guard — check if a video is already generating/scheduled for this time slot
+                existing = db.query(Video).filter(
+                    Video.series_id == series.id,
+                    Video.scheduled_for == next_upload_time,
+                    Video.status.in_(["generating", "ready", "published"])
+                ).first()
+                
+                if existing:
+                    logger.info(f"Series '{series.name}': video already exists for slot {next_upload_time} (status={existing.status}), skipping")
+                    continue
+                
+                # Check if we should generate now
+                if self.should_generate_now(next_upload_time):
+                    logger.info(f"Series '{series.name}' ready for generation (upload at {next_upload_time})")
+                    
+                    videos_to_generate.append({
+                        "series": series,
+                        "user": user,
+                        "scheduled_upload_time": next_upload_time
+                    })
+                else:
+                    time_until_gen = generation_time - now
+                    logger.info(f"Series '{series.name}': NOT in generation window. Generation starts in {time_until_gen}")
+        finally:
+            db.close()
         
         return videos_to_generate
     
@@ -278,7 +291,16 @@ class VideoScheduler:
         Returns:
             job_id if successful, None if failed
         """
+        db = self._get_db()
         try:
+            # Re-fetch entities in this session to avoid detached instance errors
+            series = db.query(Series).filter(Series.id == series.id).first()
+            user = db.query(User).filter(User.id == user.id).first()
+            
+            if not series or not user:
+                logger.error("Series or user not found in generate_scheduled_video")
+                return None
+            
             # Create video record
             video = Video(
                 series_id=str(series.id),
@@ -287,9 +309,9 @@ class VideoScheduler:
                 current_stage="initializing",
                 scheduled_for=scheduled_upload_time
             )
-            self.db.add(video)
-            self.db.commit()
-            self.db.refresh(video)
+            db.add(video)
+            db.commit()
+            db.refresh(video)
             
             logger.info(f"Created video {video.id} scheduled for {scheduled_upload_time}")
             
@@ -300,14 +322,13 @@ class VideoScheduler:
                 status="pending",
                 stage="initializing"
             )
-            self.db.add(job)
-            self.db.commit()
-            self.db.refresh(job)
+            db.add(job)
+            db.commit()
+            db.refresh(job)
             
             logger.info(f"Created job {job.id} for video {video.id}")
             
             # Trigger background video generation
-            # Note: This runs synchronously in this context
             await process_video_generation_db(
                 job_id=str(job.id),
                 video_id=str(video.id),
@@ -315,15 +336,20 @@ class VideoScheduler:
                 user_id=str(user.id)
             )
             
+            # Re-fetch to update stats (process_video_generation_db uses its own session)
+            series = db.query(Series).filter(Series.id == series.id).first()
+            user = db.query(User).filter(User.id == user.id).first()
+            
             # Update series stats
-            series.last_video_at = datetime.utcnow()
-            series.next_video_at = self.calculate_next_scheduled_time(
-                series,
-                user,
-                scheduled_upload_time
-            )
-            series.videos_generated += 1
-            self.db.commit()
+            if series:
+                series.last_video_at = datetime.utcnow()
+                series.next_video_at = self.calculate_next_scheduled_time(
+                    series,
+                    user,
+                    scheduled_upload_time
+                )
+                series.videos_generated += 1
+                db.commit()
             
             logger.info(f"✅ Video generation completed for series '{series.name}'")
             
@@ -331,8 +357,10 @@ class VideoScheduler:
             
         except Exception as e:
             logger.error(f"Failed to generate video for series '{series.name}': {e}")
-            self.db.rollback()
+            db.rollback()
             return None
+        finally:
+            db.close()
     
     async def run_scheduling_cycle(self):
         """Run one scheduling cycle - check and generate videos"""
@@ -369,8 +397,8 @@ class VideoScheduler:
             logger.info("="*60)
     
     def close(self):
-        """Close database connection"""
-        self.db.close()
+        """No-op: sessions are now per-operation, no long-lived session to close."""
+        pass
 
 
 async def run_scheduler_service():

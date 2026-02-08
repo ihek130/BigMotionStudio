@@ -271,6 +271,15 @@ class SaaSVideoGenerator:
                 generation_time_seconds=generation_time
             )
             
+            # Cleanup temp directory (scene images, voiceover chunks, etc.)
+            try:
+                import shutil
+                if os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir)
+                    self.logger.info(f"Cleaned up temp directory: {temp_dir}")
+            except Exception as cleanup_err:
+                self.logger.warning(f"Failed to clean temp directory: {cleanup_err}")
+            
             return result
             
         except Exception as e:

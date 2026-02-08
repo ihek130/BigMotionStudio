@@ -651,6 +651,7 @@ async def process_platform_upload(
     from database.models import Video as VideoModel, Series as SeriesModel, Job as JobModel
     
     db: Session = next(get_db())
+    job = None
     
     try:
         # Get records
@@ -1202,7 +1203,15 @@ async def verify_checkout(
         if checkout_user_id != str(current_user.id):
             raise HTTPException(status_code=403, detail="This checkout doesn't belong to you")
         
-        status = str(checkout.status).lower()
+        # Safely extract status string from Polar enum
+        raw_status = checkout.status
+        if hasattr(raw_status, 'value'):
+            status = str(raw_status.value).lower()
+        else:
+            status = str(raw_status).lower()
+            # Strip enum class prefix if present (e.g. "checkoutstatus.succeeded")
+            if '.' in status:
+                status = status.rsplit('.', 1)[-1]
         
         if status in ("succeeded", "confirmed"):
             # Activate the plan
@@ -1273,7 +1282,15 @@ async def polar_webhook(request: Request, db: Session = Depends(get_db)):
                     self.data = data.get("data", {})
             event = SimpleEvent(event_data)
         
-        event_type = str(event.TYPE) if hasattr(event, 'TYPE') else ""
+        event_type = ""
+        if hasattr(event, 'TYPE'):
+            raw_type = event.TYPE
+            if hasattr(raw_type, 'value'):
+                event_type = str(raw_type.value)
+            else:
+                event_type = str(raw_type)
+        elif hasattr(event, 'type'):
+            event_type = str(event.type)
         logger.info(f"Polar webhook received: {event_type}")
         
         # Handle checkout completed
@@ -1287,10 +1304,16 @@ async def polar_webhook(request: Request, db: Session = Depends(get_db)):
             elif isinstance(data, dict):
                 metadata = data.get("metadata", {})
             
-            # Get status
+            # Get status — handle both Polar enum and raw dict
             checkout_status = ""
             if hasattr(data, 'status'):
-                checkout_status = str(data.status).lower()
+                raw_st = data.status
+                if hasattr(raw_st, 'value'):
+                    checkout_status = str(raw_st.value).lower()
+                else:
+                    checkout_status = str(raw_st).lower()
+                    if '.' in checkout_status:
+                        checkout_status = checkout_status.rsplit('.', 1)[-1]
             elif isinstance(data, dict):
                 checkout_status = str(data.get("status", "")).lower()
             
@@ -1350,7 +1373,7 @@ async def polar_webhook(request: Request, db: Session = Depends(get_db)):
                     db.commit()
                     logger.info(f"Order webhook: Activated {user.email} → plan={plan}, series={series_count}")
         
-        # Handle subscription canceled
+        # Handle subscription canceled — give grace period until end of billing cycle
         elif event_type in ("subscription.canceled", "subscription.revoked"):
             data = event.data
             
@@ -1364,10 +1387,37 @@ async def polar_webhook(request: Request, db: Session = Depends(get_db)):
             if subscription_id:
                 user = db.query(User).filter(User.polar_subscription_id == subscription_id).first()
                 if user:
-                    user.plan = "free"
-                    user.series_purchased = 0
-                    db.commit()
-                    logger.info(f"Subscription canceled: {user.email} → free plan")
+                    # For "revoked" (e.g. refund) → immediate downgrade
+                    if event_type == "subscription.revoked":
+                        user.plan = "free"
+                        user.series_purchased = 0
+                        user.plan_expires_at = None
+                        db.commit()
+                        logger.info(f"Subscription revoked: {user.email} → free plan (immediate)")
+                    else:
+                        # Canceled → keep plan active until current period ends
+                        # Try to get current_period_end from Polar data
+                        period_end = None
+                        if hasattr(data, 'current_period_end'):
+                            period_end = data.current_period_end
+                        elif isinstance(data, dict):
+                            period_end = data.get("current_period_end")
+                        
+                        if period_end:
+                            from dateutil import parser as dt_parser
+                            try:
+                                user.plan_expires_at = dt_parser.parse(str(period_end)).replace(tzinfo=None)
+                            except Exception:
+                                # Fallback: expire in 30 days
+                                from datetime import timedelta
+                                user.plan_expires_at = datetime.utcnow() + timedelta(days=30)
+                        else:
+                            # No period_end data — default 30 day grace
+                            from datetime import timedelta
+                            user.plan_expires_at = datetime.utcnow() + timedelta(days=30)
+                        
+                        db.commit()
+                        logger.info(f"Subscription canceled: {user.email} → plan active until {user.plan_expires_at}")
         
         return {"received": True}
         

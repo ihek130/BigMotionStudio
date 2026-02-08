@@ -114,7 +114,11 @@ export default function NicheSelectionPage() {
       return
     }
     if (selectedNiche) {
-      updateData({ niche: selectedNiche })
+      const selectedNicheData = niches.find(n => n.id === selectedNiche)
+      updateData({ 
+        niche: selectedNiche,
+        nicheFormat: selectedNicheData?.format || 'Storytelling'
+      })
       router.push('/create/style')
     }
   }

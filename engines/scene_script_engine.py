@@ -533,7 +533,23 @@ IMPORTANT:
             response_format={"type": "json_object"}
         )
         
-        return json.loads(response.choices[0].message.content)
+        raw_content = response.choices[0].message.content
+        try:
+            return json.loads(raw_content)
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse failed on first attempt: {e}. Retrying...")
+            # Strip markdown fences if present
+            cleaned = raw_content.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[-1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned.rsplit("```", 1)[0]
+            cleaned = cleaned.strip()
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.error(f"JSON parse failed after cleanup. Raw content: {raw_content[:500]}")
+                raise ValueError(f"Failed to parse script JSON from AI response: {e}")
     
     def _parse_script_response(self, response: Dict, topic: str, settings: UserSeriesSettings) -> ScriptData:
         """Parse the GPT response into ScriptData"""

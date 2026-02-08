@@ -58,11 +58,13 @@ async def get_current_user(
 
 
 async def get_current_active_user(
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> User:
     """
     Get current user and require authentication.
     Raises 401 if not authenticated.
+    Also performs automatic monthly usage reset when applicable.
     
     Usage:
         @app.post("/create-series")
@@ -75,6 +77,10 @@ async def get_current_active_user(
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"}
         )
+    
+    # Auto-reset monthly usage counter when a new billing month starts
+    if user.check_monthly_reset():
+        db.commit()
     
     return user
 

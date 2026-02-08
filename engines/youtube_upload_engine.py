@@ -74,10 +74,13 @@ class YouTubeUploadEngine:
                 # Update database with new token
                 from database.connection import get_db
                 db = next(get_db())
-                platform_connection.access_token = credentials.token
-                platform_connection.access_token_expires_at = credentials.expiry
-                platform_connection.status = "active"
-                db.commit()
+                try:
+                    platform_connection.access_token = credentials.token
+                    platform_connection.access_token_expires_at = credentials.expiry
+                    platform_connection.status = "active"
+                    db.commit()
+                finally:
+                    db.close()
                 logger.info("YouTube token refreshed successfully")
             
             # Build YouTube service
@@ -181,9 +184,12 @@ class YouTubeUploadEngine:
             if "invalid_grant" in str(e) or "invalid_client" in str(e):
                 from database.connection import get_db
                 db = next(get_db())
-                platform_connection.status = "expired"
-                platform_connection.last_error = str(e)
-                db.commit()
+                try:
+                    platform_connection.status = "expired"
+                    platform_connection.last_error = str(e)
+                    db.commit()
+                finally:
+                    db.close()
             
             return {
                 'success': False,

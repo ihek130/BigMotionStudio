@@ -68,9 +68,9 @@ export default function CheckoutSuccessPage() {
           setStatus('processing')
           setTimeout(() => setRetryCount(prev => prev + 1), 3000)
         } else {
-          setStatus('success') // Assume success after retries — webhook will handle it
+          // Still not confirmed — show processing state (webhook will handle activation)
+          setStatus('processing')
           setPlanName('your selected')
-          await refreshUser()
         }
       }
     } catch (err) {
@@ -114,7 +114,21 @@ export default function CheckoutSuccessPage() {
               <Loader2 className="w-16 h-16 text-amber-500 animate-spin mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Processing Payment...</h1>
               <p className="text-gray-600">Your payment is being processed. This may take a moment.</p>
-              <p className="text-sm text-gray-400 mt-2">Attempt {retryCount + 1} of 6</p>
+              {retryCount < 5 ? (
+                <p className="text-sm text-gray-400 mt-2">Attempt {retryCount + 1} of 6</p>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm text-gray-500">
+                    Your payment was received and your plan will activate automatically within a few minutes.
+                  </p>
+                  <button
+                    onClick={() => router.push('/dashboard')}
+                    className="mt-3 px-6 py-2 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
+                  >
+                    Go to Dashboard
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

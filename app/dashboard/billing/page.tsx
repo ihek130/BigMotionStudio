@@ -252,12 +252,12 @@ export default function BillingPage() {
                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-emerald-500 rounded-full transition-all"
-                      style={{ width: `${(currentCredits / maxCredits) * 100}%` }}
+                      style={{ width: `${maxCredits > 0 ? Math.min((currentCredits / maxCredits) * 100, 100) : 0}%` }}
                     />
                   </div>
                 </div>
                 <span className="text-sm font-medium text-gray-600">
-                  {currentCredits}/{maxCredits} videos
+                  {currentPlan === 'free' ? 'No credits' : `${currentCredits}/${maxCredits} videos`}
                 </span>
               </div>
             </div>

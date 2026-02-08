@@ -19,11 +19,10 @@ export interface User {
   profile_image?: string;
   created_at: string;
   plan_limits: {
+    videos_total: number;
     videos_per_month: number;
-    max_series: number;
     series_limit: number;
-    can_generate: boolean;
-    remaining_videos: number;
+    platforms: string[];
   };
 }
 

@@ -26,13 +26,13 @@ class SEOEngine:
         niche = niche or 'general'
         
         # Generate title
-        title = self._generate_title(topic, script_text)
+        title = self._generate_title(topic, script_text, niche)
         
         # Generate description
         description = self._generate_description(topic, script_text, niche)
         
         # Generate tags
-        tags = self._generate_tags(topic, script_text)
+        tags = self._generate_tags(topic, script_text, niche)
         
         # Generate chapters
         chapters = self._generate_chapters(script_data)
@@ -47,101 +47,38 @@ class SEOEngine:
         logger.info("SEO metadata generated")
         return metadata
     
-    def _generate_title(self, topic: str, script_text: str) -> str:
-        """Generate CTR-optimized title using PROVEN viral formulas"""
-        rules = {}
+    def _get_niche_label(self, niche: str) -> str:
+        """Get human-readable niche label for prompts."""
+        labels = {
+            'scary-stories': 'horror and scary stories',
+            'true-crime': 'true crime and mystery',
+            'history': 'history and historical events',
+            'psychology': 'psychology and human behavior',
+            'stoic-motivation': 'stoic philosophy and motivation',
+            'random-fact': 'interesting facts and trivia',
+            'good-morals': 'moral lessons and inspiration',
+        }
+        return labels.get(niche, niche.replace('-', ' '))
+    
+    def _generate_title(self, topic: str, script_text: str, niche: str = 'general') -> str:
+        """Generate CTR-optimized title using viral formulas adapted to the niche"""
         max_length = 70
-        title_variations = rules.get('title_variations', {})
+        niche_label = self._get_niche_label(niche)
         
-        # Calculate weighted random selection (60% Jani, 25% Ramsey, 15% Psychology)
-        import random
-        rand = random.randint(1, 100)
-        
-        if rand <= 60:
-            # James Jani Style (60%)
-            style_type = "james_jani"
-            prompt = f"""Create a YouTube video title using James Jani's PROVEN 9.4M view formula.
+        prompt = f"""Create a YouTube Shorts title that maximizes click-through rate.
 
+Niche/Genre: {niche_label}
 Topic: {topic}
-
-Script excerpt: {script_text[:500]}
-
-EXACT FORMULAS TO USE:
-1. "The Dark Truth About [Finance Topic]"
-2. "The $[Amount] [Finance Topic] Nobody Talks About"
-3. "The Fake [Person/Industry]: [Revelation]"
-4. "I Confronted [Financial Industry/Scammers]"
-5. "The Insane World of [Finance Topic]"
-
-Rules:
-- Maximum {max_length} characters
-- Use words: Dark, Truth, Fake, Insane, Exposed, Lie
-- Include specific dollar amounts if relevant
-- Finance/money topic ONLY
-- Documentary investigation tone
-- NO clickbait, just dramatic truth
-- Avoid repeating the exact phrase "The Dark Truth About" if possible; vary wording while keeping the same energy.
-
-Examples:
-- "The Dark Truth About Financial Advisors"
-- "The $30 Billion Retirement Scam"
-- "I Confronted the Credit Card Industry"
-
-Return only the title, nothing else."""
-
-        elif rand <= 85:
-            # Ramsey Show Style (25%)
-            style_type = "ramsey_show"
-            prompt = f"""Create a YouTube video title using The Ramsey Show's PROVEN 100K+ view formula.
-
-Topic: {topic}
-
-Script excerpt: {script_text[:500]}
-
-EXACT FORMULAS TO USE:
-1. "I Owe $[Amount] Because of [Mistake]"
-2. "[Age]-Year-Old [Problem] — Here's Why"
-3. "[Person] [Action] — Am I Crazy?"
-4. "The IRS Says I Owe [Amount]"
-
-Rules:
-- Maximum {max_length} characters
-- Use SPECIFIC dollar amounts
-- Use real-life problem scenarios
-- Conversational, relatable tone
-- Age-based situations work great
-- Finance/debt problems ONLY
-
-Examples:
-- "I Owe $180,000 in Student Loans — Here's Why"
-- "35-Year-Old Living at Home — Am I Crazy?"
-- "She Lost $50,000 to a Financial Guru"
-
-Return only the title, nothing else."""
-
-        else:
-            # Identity Threat Psychology (15%)
-            style_type = "identity_threat"
-            prompt = f"""Create a YouTube video title using identity threat psychology.
-
-Topic: {topic}
-
 Script excerpt: {script_text[:500]}
 
 Rules:
 - Maximum {max_length} characters
-- Challenge viewer's beliefs/identity
-- Use contradiction or reversal
-- Natural, readable phrasing
-- Should make viewer question themselves
-- Finance/money psychology focus
-
-Examples:
-- "Why Smart People Stay Broke (It's Not What You Think)"
-- "You're Saving Money Wrong (Here's Why)"
-- "If You Think You're Good With Money, You're Not"
-
-Return only the title, nothing else."""
+- Use curiosity gap, dramatic tension, or identity challenge
+- MUST be relevant to the "{niche_label}" niche — do NOT reference unrelated topics
+- Use power words appropriate for this niche (e.g., shocking, untold, hidden, secret, terrifying, mind-blowing)
+- No clickbait, just dramatic truth
+- Vary phrasing — avoid repetitive sentence structures
+- Return ONLY the title, nothing else."""
 
         try:
             response = self.client.chat.completions.create(
@@ -157,7 +94,7 @@ Return only the title, nothing else."""
             if len(title) > max_length:
                 title = title[:max_length-3] + '...'
             
-            logger.info(f"Generated {style_type} style title: {title}")
+            logger.info(f"Generated title for niche '{niche}': {title}")
             return title
             
         except Exception as e:
@@ -209,7 +146,8 @@ Return only the description text."""
             
         except Exception as e:
             logger.error(f"Error generating description: {e}")
-            return f"Learn about {topic} and improve your financial psychology."
+            niche_label = self._get_niche_label(niche)
+            return f"Discover fascinating insights about {topic}. #Shorts #{niche_label.replace(' ', '')}"
     
     def _get_niche_hashtags(self, niche: str) -> str:
         """Get niche-specific hashtags for Shorts"""
@@ -224,18 +162,17 @@ Return only the description text."""
         }
         return hashtag_map.get(niche, '#Shorts #Viral #Trending #Entertainment')
     
-    def _generate_tags(self, topic: str, script_text: str) -> List[str]:
-        """Generate relevant tags from topic/script.
-
-        Hardcoding other channels as tags is usually low-signal and can confuse targeting.
-        """
-        prompt = f"""Generate 12-18 YouTube tags for a personal finance + money psychology investigation video.
+    def _generate_tags(self, topic: str, script_text: str, niche: str = 'general') -> List[str]:
+        """Generate relevant tags from topic/script, adapted to the niche."""
+        niche_label = self._get_niche_label(niche)
+        
+        prompt = f"""Generate 12-18 YouTube tags for a {niche_label} video.
 
 Topic: {topic}
 
 Rules:
-- Tags must be relevant to THIS topic
-- Mix broad + specific phrases (e.g., "bank fees", "hidden fees", "money psychology")
+- Tags must be relevant to THIS topic and the "{niche_label}" niche
+- Mix broad + specific phrases
 - Avoid unrelated creator/channel names
 - No hashtags, just comma-separated tags
 
@@ -266,9 +203,17 @@ Return comma-separated tags only."""
 
         except Exception as e:
             logger.error(f"Error generating tags: {e}")
-            # Reasonable fallback
-            base = ["personal finance", "money psychology", "financial literacy", "investing", "saving money"]
-            return base
+            # Niche-aware fallback
+            fallback_map = {
+                'scary-stories': ["scary stories", "horror", "creepy", "paranormal", "true scary stories"],
+                'true-crime': ["true crime", "crime stories", "mystery", "investigation", "unsolved cases"],
+                'history': ["history", "historical events", "world history", "history facts", "learn history"],
+                'psychology': ["psychology", "human behavior", "mind facts", "psychology facts", "mental health"],
+                'stoic-motivation': ["stoicism", "motivation", "self improvement", "philosophy", "mindset"],
+                'random-fact': ["facts", "did you know", "trivia", "interesting facts", "amazing facts"],
+                'good-morals': ["life lessons", "moral stories", "inspiration", "wisdom", "values"],
+            }
+            return fallback_map.get(niche, ["shorts", "viral", "trending", "entertainment", "facts"])
     
     def _generate_chapters(self, script_data: Dict) -> List[Dict]:
         """Generate video chapters"""

@@ -5,6 +5,7 @@ Uploads videos as Instagram Reels using Meta Business API.
 
 import os
 import time
+import asyncio
 from datetime import datetime
 from typing import Dict, Optional
 import logging
@@ -77,12 +78,20 @@ class InstagramUploadEngine:
                 if video_path.startswith('http'):
                     video_url = video_path
                 else:
-                    # Need to upload to temp hosting first
-                    # This is a placeholder - implement your file hosting
-                    raise NotImplementedError(
-                        "Instagram requires publicly accessible video URL. "
-                        "Please upload video to cloud storage first and pass URL."
+                    # Instagram Graph API requires a publicly accessible URL
+                    # Local files cannot be uploaded directly
+                    logger.warning(
+                        "Instagram upload skipped — local file provided but Instagram "
+                        "requires a publicly accessible URL. Configure cloud storage "
+                        "(e.g., S3, Cloudflare R2) to enable Instagram uploads."
                     )
+                    return {
+                        'success': False,
+                        'platform': 'instagram',
+                        'error': 'Instagram requires a public video URL. Cloud storage integration needed.',
+                        'error_type': 'ConfigurationRequired',
+                        'note': 'Configure S3/Cloudflare R2 for Instagram upload support.'
+                    }
                 
                 # Create media container
                 container_params = {
@@ -198,9 +207,12 @@ class InstagramUploadEngine:
             if "invalid_token" in str(e) or "expired" in str(e).lower():
                 from database.connection import get_db
                 db = next(get_db())
-                platform_connection.status = "expired"
-                platform_connection.last_error = str(e)
-                db.commit()
+                try:
+                    platform_connection.status = "expired"
+                    platform_connection.last_error = str(e)
+                    db.commit()
+                finally:
+                    db.close()
             
             return {
                 'success': False,
@@ -248,7 +260,6 @@ class InstagramUploadEngine:
 
 
 # Async helper for sync contexts
-import asyncio
 
 def upload_instagram_sync(platform_connection, video_path, caption, **kwargs):
     """Synchronous wrapper for async upload_video method"""

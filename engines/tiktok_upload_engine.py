@@ -125,16 +125,17 @@ class TikTokUploadEngine:
                 
                 logger.info(f"Upload initialized: {publish_id}")
                 
-                # Step 2: Upload video file
+                # Step 2: Upload video file (stream from disk to avoid loading entire file in memory)
                 logger.info("Step 2: Uploading video file...")
                 
                 with open(video_path, 'rb') as video_file:
                     upload_response = await client.put(
                         upload_url,
                         headers={
-                            "Content-Type": "video/mp4"
+                            "Content-Type": "video/mp4",
+                            "Content-Length": str(file_size)
                         },
-                        content=video_file.read()
+                        content=video_file
                     )
                 
                 if upload_response.status_code != 200:
@@ -198,9 +199,12 @@ class TikTokUploadEngine:
             if "invalid_token" in str(e) or "unauthorized" in str(e).lower():
                 from database.connection import get_db
                 db = next(get_db())
-                platform_connection.status = "expired"
-                platform_connection.last_error = str(e)
-                db.commit()
+                try:
+                    platform_connection.status = "expired"
+                    platform_connection.last_error = str(e)
+                    db.commit()
+                finally:
+                    db.close()
             
             return {
                 'success': False,
