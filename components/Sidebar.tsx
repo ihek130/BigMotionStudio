@@ -25,7 +25,9 @@ export default function Sidebar({ mobileOpen = false, onClose }: SidebarProps = 
 
   // User data from context or defaults
   const userPlan = (user?.plan || 'launch') as PlanType
-  const credits = user?.plan_limits?.remaining_videos ?? 0
+  const maxVideos = user?.plan_limits?.videos_per_month ?? 0
+  const used = user?.videos_generated_this_month ?? 0
+  const credits = Math.max(0, maxVideos - used)
   const userEmail = user?.email || ''
   const userName = user?.name || userEmail.split('@')[0] || 'User'
 
