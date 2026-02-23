@@ -301,9 +301,9 @@ export default function VideoDetailPage() {
 
         {/* Content */}
         <div className="px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Video Preview */}
-            <div className="lg:col-span-1 space-y-4">
+          <div className="flex justify-center">
+            {/* Video Preview */}
+            <div className="w-full max-w-sm space-y-4">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Video Preview</h3>
                 
@@ -356,191 +356,15 @@ export default function VideoDetailPage() {
                 )}
               </div>
 
-              {/* Publishing Status */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              {/* Publishing Status - hidden until platforms are approved */}
+              {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 className="font-bold text-sm text-gray-900 mb-3">Publishing Status</h3>
-                <div className="space-y-2">
-                  {Object.keys(video.publishing).length > 0 ? (
-                    Object.entries(video.publishing).map(([platform, data]) => (
-                      <div key={platform} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-700 capitalize">{platform === 'youtube' ? 'YouTube' : platform === 'tiktok' ? 'TikTok' : 'Instagram'}</span>
-                        </div>
-                        {getStatusBadge(data.status)}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-400 text-center py-2">No platforms configured</p>
-                  )}
-                </div>
-              </div>
+                ...
+              </div> */}
             </div>
 
-            {/* Right Column - Metadata Form */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="font-bold text-lg text-gray-900 mb-6">Video Settings</h3>
-                
-                <div className="space-y-6">
-                  {/* Title */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Title <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      maxLength={100}
-                      className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">{formData.title.length}/100 characters</p>
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={4}
-                      className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-                      placeholder="Add hashtags and description..."
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Supports hashtags for all platforms</p>
-                  </div>
-
-                  {/* Scheduling */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Schedule Publishing
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="date"
-                        value={formData.scheduled_date}
-                        onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
-                        className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-                      />
-                      <input
-                        type="time"
-                        value={formData.scheduled_time}
-                        onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
-                        className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">When should this video be published?</p>
-                  </div>
-
-                  {/* Privacy */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Privacy Settings
-                    </label>
-                    <select
-                      value={formData.privacy}
-                      onChange={(e) => setFormData({ ...formData, privacy: e.target.value as any })}
-                      className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none"
-                    >
-                      <option value="public">Public</option>
-                      <option value="private">Private</option>
-                      <option value="unlisted">Unlisted</option>
-                    </select>
-                  </div>
-
-                  {/* Interaction Preferences */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Interaction Preferences
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={formData.allow_comments}
-                          onChange={(e) => setFormData({ ...formData, allow_comments: e.target.checked })}
-                          className="w-4 h-4 text-emerald-500 border-gray-300 rounded focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">Allow comments</span>
-                      </label>
-                      <label className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={formData.allow_duets}
-                          onChange={(e) => setFormData({ ...formData, allow_duets: e.target.checked })}
-                          className="w-4 h-4 text-emerald-500 border-gray-300 rounded focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">Allow duets</span>
-                      </label>
-                      <label className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={formData.allow_stitches}
-                          onChange={(e) => setFormData({ ...formData, allow_stitches: e.target.checked })}
-                          className="w-4 h-4 text-emerald-500 border-gray-300 rounded focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">Allow stitches</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Compliance */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Compliance & Disclosure
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={formData.commercial}
-                          onChange={(e) => setFormData({ ...formData, commercial: e.target.checked })}
-                          className="w-4 h-4 text-emerald-500 border-gray-300 rounded focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">This content is for commercial purposes</span>
-                      </label>
-                      <label className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={formData.ai_disclosure}
-                          onChange={(e) => setFormData({ ...formData, ai_disclosure: e.target.checked })}
-                          className="w-4 h-4 text-emerald-500 border-gray-300 rounded focus:ring-emerald-500"
-                        />
-                        <span className="text-sm text-gray-700">Disclose AI-generated content</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <Check className="w-4 h-4 text-green-600" />
-                      <span>All changes saved</span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="flex items-center space-x-2 px-6 py-2 border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 font-semibold rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        <Save className="w-4 h-4" />
-                        <span>{saving ? 'Saving...' : 'Save'}</span>
-                      </button>
-                      <button
-                        onClick={handlePublishAgain}
-                        disabled={publishing || !video.rendered}
-                        className="flex items-center space-x-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {publishing && <Loader2 className="w-4 h-4 animate-spin" />}
-                        <span>{publishing ? 'Publishing...' : 'Publish Again'}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Right Column - Video Settings (hidden until platforms are approved) */}
+            {/* <div className="lg:col-span-2"> ... </div> */}
           </div>
         </div>
       </div>

@@ -202,13 +202,11 @@ export default function PlatformsPage() {
   }
 
   const handleFinish = async () => {
-    if (selectedPlatforms.length === 0) return
-    
     setLoading('creating')
     
     try {
-      // Update wizard context with selected platforms
-      updateData({ platforms: selectedPlatforms })
+      // Update wizard context with empty platforms for now (manual download only)
+      updateData({ platforms: [] })
       
       // Get token
       const token = getToken()
@@ -231,7 +229,7 @@ export default function PlatformsPage() {
         description: data.description || '',
         postingTimes: data.postingTimes || ['09:00'],
         timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        platforms: selectedPlatforms
+        platforms: [] // Force empty platforms for manual download
       }
       
       // Call backend to create series
@@ -298,8 +296,18 @@ export default function PlatformsPage() {
         </p>
       </div>
 
+      {/* Temporary Disclaimer */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-center">
+        <p className="text-sm text-amber-800 font-medium">
+          ⚠️ Our deal with YouTube, Instagram, and TikTok is currently in mid-approval. The auto-upload feature is coming in 14 days!
+        </p>
+        <p className="text-xs text-amber-700 mt-1">
+          For now, you can create your videos and download them manually. You can skip this step and continue.
+        </p>
+      </div>
+
       {/* Platform Cards - Horizontal layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 opacity-50 pointer-events-none">
         {platforms.map((platform) => {
           const Icon = platform.icon
           const connection = connectedPlatforms[platform.id]
@@ -448,12 +456,7 @@ export default function PlatformsPage() {
         </button>
         <button
           onClick={handleFinish}
-          disabled={selectedPlatforms.length === 0}
-          className={`group px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center space-x-2 text-sm ${
-            selectedPlatforms.length > 0
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/40 hover:shadow-xl hover:-translate-y-0.5'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-          }`}
+          className="group px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center space-x-2 text-sm bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/40 hover:shadow-xl hover:-translate-y-0.5"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

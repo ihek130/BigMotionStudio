@@ -100,7 +100,8 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-600 mt-1">Manage your account settings and connected platforms</p>
           </div>
 
-          {/* Connected Accounts Section */}
+          {/* Connected Accounts Section - Temporarily Hidden */}
+          {/*
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-4">
             <div className="p-4 border-b border-gray-200">
               <h2 className="text-base font-semibold text-gray-900">Connected accounts</h2>
@@ -170,7 +171,6 @@ export default function SettingsPage() {
                 </>
               )}
 
-              {/* Connect New Account Button */}
               <button
                 onClick={() => setShowConnectModal(true)}
                 disabled={isLoading}
@@ -181,6 +181,7 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+          */}
 
           {/* Notification Settings */}
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-4">

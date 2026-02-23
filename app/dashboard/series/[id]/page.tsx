@@ -373,7 +373,8 @@ export default function SeriesDetailPage() {
                 )}
               </div>
 
-              {/* Connected Accounts */}
+              {/* Connected Accounts - Temporarily Hidden */}
+              {/*
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -416,6 +417,7 @@ export default function SeriesDetailPage() {
                   </div>
                 )}
               </div>
+              */}
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">

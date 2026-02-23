@@ -78,7 +78,7 @@ class PlatformUploadOrchestrator:
         caption = self._create_caption(title, description, tags)
         
         results = {}
-        overall_success = False
+        overall_success = True if not platforms else False
         
         # Upload to each platform
         for platform in platforms:
@@ -182,14 +182,14 @@ class PlatformUploadOrchestrator:
         
         # Update video status
         if overall_success:
-            video_record.status = "published"
+            video_record.status = "published" if platforms else "completed"
             
             # Clear scheduled_for if it was scheduled
             if scheduled_time and video_record.scheduled_for:
                 logger.info(f"Video published at scheduled time: {scheduled_time}")
             
-            # 🗑️ CLEANUP: Delete temp files after successful upload
-            self._cleanup_temp_files(video_record)
+            # 🗑️ CLEANUP: Temporarily disabled so users can download videos manually
+            # self._cleanup_temp_files(video_record)
         
         db.commit()
         

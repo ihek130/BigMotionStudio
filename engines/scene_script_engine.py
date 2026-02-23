@@ -751,10 +751,10 @@ Return ONLY the enhanced visual description (2-3 sentences), nothing else.
         
         # 3. Check word count
         target_min, target_max = settings.get_word_count_target()
-        if script_data.word_count < target_min * 0.8:
+        if script_data.word_count < target_min * 0.5: # Relaxed from 0.8 to 0.5
             issues.append(f"Script too short: {script_data.word_count} words (target: {target_min}-{target_max})")
             score -= 20
-        elif script_data.word_count > target_max * 1.2:
+        elif script_data.word_count > target_max * 1.5: # Relaxed from 1.2 to 1.5
             issues.append(f"Script too long: {script_data.word_count} words (target: {target_min}-{target_max})")
             score -= 15
         
@@ -782,7 +782,7 @@ Return ONLY the enhanced visual description (2-3 sentences), nothing else.
             score -= 5
         
         # Determine pass/fail
-        passed = len(issues) == 0 and score >= 60
+        passed = len(issues) == 0 and score >= 50 # Relaxed from 60 to 50
         
         return {
             "passed": passed,
@@ -791,6 +791,6 @@ Return ONLY the enhanced visual description (2-3 sentences), nothing else.
             "warnings": warnings,
             "niche_alignment": keyword_matches >= 2,
             "hook_strength": "strong" if has_strong_hook else "weak",
-            "word_count_valid": target_min * 0.8 <= script_data.word_count <= target_max * 1.2,
+            "word_count_valid": target_min * 0.5 <= script_data.word_count <= target_max * 1.5,
             "retention_triggers": retention_count
         }

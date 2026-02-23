@@ -203,6 +203,11 @@ class AudixaTTSEngine:
                 if len(text) > self.max_chars_per_request:
                     return self._generate_chunked(text, voice_config, output_path)
                 
+                # Pad text if it's too short (Audixa requires minimum 30 chars)
+                if len(text) < 30:
+                    logger.info(f"Text too short ({len(text)} chars), padding to meet 30 char minimum")
+                    text = text.ljust(30, ' ')
+                
                 # Generate audio using Audixa SDK
                 # SDK outputs WAV by default, we'll convert to MP3
                 temp_wav_path = output_path.replace('.mp3', '.wav')
@@ -219,7 +224,7 @@ class AudixaTTSEngine:
                 tts_params = {
                     "text": text,
                     "filepath": temp_wav_path,
-                    "voice": voice_config["voice_id"],
+                    "voice_id": voice_config["voice_id"],
                     "model": self.default_model,
                     "speed": speed,
                 }
@@ -232,7 +237,7 @@ class AudixaTTSEngine:
                     tts_params["temperature"] = temperature
                 
                 # Log the exact parameters for debugging
-                logger.info(f"TTS params: voice={tts_params['voice']}, model={tts_params['model']}, speed={tts_params['speed']}, text_len={len(tts_params['text'])}")
+                logger.info(f"TTS params: voice_id={tts_params['voice_id']}, model={tts_params['model']}, speed={tts_params['speed']}, text_len={len(tts_params['text'])}")
                 logger.info(f"Text first 100 chars: {repr(tts_params['text'][:100])}")
                 
                 audixa.tts_to_file(**tts_params, timeout=600, poll_interval=2.0)
@@ -281,6 +286,11 @@ class AudixaTTSEngine:
             for i, chunk in enumerate(chunks):
                 logger.info(f"Generating chunk {i+1}/{len(chunks)}")
                 
+                # Pad chunk if it's too short (Audixa requires minimum 30 chars)
+                if len(chunk) < 30:
+                    logger.info(f"Chunk too short ({len(chunk)} chars), padding to meet 30 char minimum")
+                    chunk = chunk.ljust(30, ' ')
+                
                 # Create temp file for this chunk
                 temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
                 temp_wav.close()
@@ -288,9 +298,9 @@ class AudixaTTSEngine:
                 
                 # Generate audio using Audixa SDK
                 audixa.tts_to_file(
-                    chunk,
-                    temp_wav.name,
-                    voice=voice_config["voice_id"],
+                    text=chunk,
+                    filepath=temp_wav.name,
+                    voice_id=voice_config["voice_id"],
                     model=self.default_model,
                     timeout=600,
                     poll_interval=2.0,

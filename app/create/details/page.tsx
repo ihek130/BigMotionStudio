@@ -214,7 +214,8 @@ export default function DetailsPage() {
             </div>
           </div>
 
-          {/* Posting Times - Dynamic based on plan */}
+          {/* Posting Times - Dynamic based on plan (Temporarily Hidden) */}
+          {/*
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-2">
               <span className="flex items-center space-x-1">
@@ -252,8 +253,10 @@ export default function DetailsPage() {
               )}
             </div>
           </div>
+          */}
 
-          {/* Timezone */}
+          {/* Timezone (Temporarily Hidden) */}
+          {/*
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-2">
               <span className="flex items-center space-x-1">
@@ -275,7 +278,6 @@ export default function DetailsPage() {
                   {tz.label}
                 </option>
               ))}
-              {/* If user's detected timezone isn't in our list, add it */}
               {!timezoneOptions.find(tz => tz.value === formData.timezone) && (
                 <option value={formData.timezone}>
                   {formData.timezone}
@@ -283,6 +285,7 @@ export default function DetailsPage() {
               )}
             </select>
           </div>
+          */}
 
           {/* Compact Summary */}
           <div className="p-3 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
@@ -312,6 +315,7 @@ export default function DetailsPage() {
                 <span className="text-gray-500">Duration:</span>
                 <span className="font-medium text-gray-700">{formData.videoDuration}s</span>
               </div>
+              {/*
               <div className="flex justify-between col-span-2 sm:col-span-3">
                 <span className="text-gray-500">Posting:</span>
                 <span className="font-medium text-gray-700">
@@ -320,6 +324,7 @@ export default function DetailsPage() {
                     : formData.postingTime1}
                 </span>
               </div>
+              */}
             </div>
           </div>
         </div>
