@@ -1151,7 +1151,7 @@ async def create_checkout(
         
         # Create checkout with product + metadata
         checkout = polar.checkouts.create(request=CheckoutCreate(
-            product_id=product_id,
+            products=[product_id],
             success_url=f"{frontend_url}/dashboard/billing/success?checkout_id={{CHECKOUT_ID}}",
             customer_email=current_user.email,
             metadata={
